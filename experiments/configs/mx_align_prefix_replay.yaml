@@ -1,0 +1,19 @@
+# Short-prefix replay of the formal MXFP8 K sweep with fixed W_align=21.
+# Reuses results_mx/mx_formal inputs (40 pairs), evaluating only K in [32, 64]
+# to validate the source-consistency checks on real data without running the
+# full 10-K formal alignment sweep.
+mode: mx_alignment_sweep
+M: 16
+N: 64
+K_list: [32, 64]
+W_align: 21
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1, 2, 3, 4, 5]
+pairs_per_seed: 2
+source_run: results/numerical/mxfp8/runs/mx_formal
+output_root: results/numerical/mx_alignment/runs
+run_name: mx_align_prefix_replay

@@ -1,0 +1,16 @@
+# MXFP8 pilot run (current input scheme: numeric-domain FP32 -> G32 MXFP8).
+# Four same-distribution pairs; used to measure time/memory/disk for the formal
+# template under the new input pipeline.
+mode: mx_matrix_sweep
+M: 4
+N: 64
+K_list: [32, 128, 512, 2048]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1, 2]
+pairs_per_seed: 1
+output_root: results/numerical/mxfp8/runs
+run_name: mx_pilot

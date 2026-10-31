@@ -1,0 +1,32 @@
+Use case: scientific-educational.
+Asset type: a publication-ready diagram for a Chinese engineering practice report on quantized LLM computation.
+Create ONE clean, accurate flat vector-style raster figure on a pure white background, landscape, high resolution, four equal panels arranged horizontally. No photos, no 3D, no textures, no gradients, no decorative icons. Professional academic typography, crisp thin charcoal grid lines, generous white space, muted colorblind-friendly pastel fills.
+
+Main title exactly: "四种量化粒度示意"
+Each panel contains the SAME 4-row by 8-column matrix with exactly 32 identical square cells. Each row represents a token; each column represents a feature channel. Above EACH grid put a small right-pointing horizontal axis labeled "特征通道"; left of EACH grid put a small downward axis labeled "Token". Matrix cells have no numbers and no random variation. All cells in a region that shares ONE scale are exactly the same color. Every distinct region within a panel gets a different fill color. Thin lines between cells, thicker dark borders between quantization regions. Do not extend a region across any unrelated row or gap.
+
+Panel 1 heading "（a）Per-tensor"
+All 32 cells the same pastel blue, only whole matrix outer boundary bold.
+Under grid exactly "整个张量共享一个尺度"
+Next line exactly "1 组量化参数"
+
+Panel 2 heading "（b）Per-token"
+Each full row of 8 cells has its own color, four differently colored horizontal rows. Bold region border around each full row.
+Under grid exactly "每个 Token 共享一个尺度"
+Next line exactly "4 组量化参数"
+
+Panel 3 heading "（c）Per-group"
+Split each of the four rows into TWO contiguous groups of four cells each. There are exactly EIGHT independent 1-row by 4-column groups. Each of the eight groups has a different muted pastel fill. Bold border around each 1x4 group. A bold vertical division after column four; bold horizontal divisions between all rows. Make this visually distinct from panel 4.
+Under grid exactly "每行按连续元素分组"
+Next line exactly "8 组量化参数（组长为 4）"
+
+Panel 4 heading "（d）Per-block"
+Divide the matrix into FOUR rectangular 2-row by 4-column blocks, a 2x2 tiling of blocks. Each block has its own color. The two rows INSIDE each block are the SAME color and have only thin cell grid lines between them. Only outer border, middle row boundary (after row 2), and middle column boundary (after column 4) are bold.
+Under grid exactly "每个二维块共享一个尺度"
+Next line exactly "4 组量化参数（块大小为 2×4）"
+
+At the bottom spanning the whole figure, two short aligned notes, exactly:
+"颜色表示共享量化参数的范围，不表示元素数值。"
+"图中 Per-block 采用二维块示例；实际块形状与分组方向由具体算法规定。"
+
+Accuracy is essential: Per-group is 8 one-row strips, Per-block is 4 two-row rectangles. Chinese text legible and exact. All headings, grids, captions, and axis labels aligned consistently. Keep the four grids prominent; avoid large banner title or excess empty space. No watermark, no fake equation, no arrows suggesting a universal accuracy ranking.

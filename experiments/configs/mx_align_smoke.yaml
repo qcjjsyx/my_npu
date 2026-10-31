@@ -1,0 +1,16 @@
+# Fixed-W_align alignment smoke run (fresh inputs, W_align=21).
+# Exercises pairs_per_seed=2 and the four same-distribution combinations.
+mode: mx_alignment_sweep
+M: 2
+N: 32
+K_list: [32, 64]
+W_align: 21
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1]
+pairs_per_seed: 2
+output_root: results/numerical/mx_alignment/runs
+run_name: mx_align_smoke

@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "多精度融合 MAC 整体架构",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      1330,
+      350
+    ]
+  },
+  "components": [
+    {
+      "id": "operand_input",
+      "type": "external",
+      "label": "输入 A / B",
+      "pos": [
+        21.0,
+        210.0
+      ],
+      "size": [
+        98.0,
+        56.0
+      ]
+    },
+    {
+      "id": "input_prepare",
+      "type": "backend",
+      "label": "入口转换",
+      "pos": [
+        157.5,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "multiply_array",
+      "type": "backend",
+      "label": "M",
+      "sublabel": "共享乘法 ×16",
+      "pos": [
+        329.0,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "product_align",
+      "type": "backend",
+      "label": "ALIGN",
+      "sublabel": "乘积对阶",
+      "pos": [
+        500.5,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "partial_sum",
+      "type": "backend",
+      "label": "PSUM",
+      "sublabel": "归约与重构",
+      "pos": [
+        672.0,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "microscale",
+      "type": "backend",
+      "label": "MX",
+      "sublabel": "尺度恢复",
+      "pos": [
+        843.5,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "accumulate",
+      "type": "backend",
+      "label": "ACC",
+      "sublabel": "ACC0 / ACC1",
+      "pos": [
+        1015.0,
+        210.0
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "snapshot_output",
+      "type": "external",
+      "label": "输出快照",
+      "pos": [
+        1179.5,
+        210.0
+      ],
+      "size": [
+        112.0,
+        56.0
+      ]
+    },
+    {
+      "id": "transaction_control",
+      "type": "external",
+      "label": "模式 / 控制",
+      "sublabel": "ready / valid",
+      "pos": [
+        157.5,
+        60
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    },
+    {
+      "id": "scale_input",
+      "type": "external",
+      "label": "块尺度",
+      "pos": [
+        843.5,
+        60
+      ],
+      "size": [
+        126.0,
+        56.0
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "MAC",
+      "wraps": [
+        "input_prepare",
+        "multiply_array",
+        "product_align",
+        "partial_sum",
+        "microscale",
+        "accumulate"
+      ],
+      "pad": 25
+    }
+  ],
+  "connections": [
+    {
+      "id": "input_to_prepare",
+      "from": "operand_input",
+      "to": "input_prepare",
+      "variant": "emphasis"
+    },
+    {
+      "id": "prepare_to_m",
+      "from": "input_prepare",
+      "to": "multiply_array",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m_to_align",
+      "from": "multiply_array",
+      "to": "product_align",
+      "variant": "emphasis"
+    },
+    {
+      "id": "align_to_psum",
+      "from": "product_align",
+      "to": "partial_sum",
+      "variant": "emphasis"
+    },
+    {
+      "id": "psum_to_mx",
+      "from": "partial_sum",
+      "to": "microscale",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mx_to_acc",
+      "from": "microscale",
+      "to": "accumulate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "acc_to_snapshot",
+      "from": "accumulate",
+      "to": "snapshot_output",
+      "variant": "emphasis"
+    },
+    {
+      "id": "control_to_prepare",
+      "from": "transaction_control",
+      "to": "input_prepare",
+      "variant": "dashed"
+    },
+    {
+      "id": "scale_to_mx",
+      "from": "scale_input",
+      "to": "microscale",
+      "variant": "dashed"
+    }
+  ]
+}

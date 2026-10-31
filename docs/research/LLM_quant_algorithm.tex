@@ -1,0 +1,986 @@
+% 本文件是可被 latex-notes/main.tex 直接 \input 的章节片段。
+% 不包含 documentclass、usepackage、begin/end document，也不依赖额外 bib 条目。
+
+\providecommand{\qsrc}[2]{\href{#2}{\textnormal{[#1]}}}
+\providecommand{\Wfmt}[2]{\mathrm{W#1A#2}}
+
+\section{LLM 量化算法与张量乘单元硬件映射}
+\label{sec:llm-quant-algorithm}
+
+\subsection{调研目标与结论先行}
+
+本节面向以 LLM 推理为主要负载的 NPU 张量乘法单元，回答四个问题：
+为什么需要某种量化算法；量化发生在权重（W）、激活（A）、KV cache、非线性
+或训练状态的什么位置；数值以何种格式和粒度保存；低比特数据进入硬件后
+究竟执行什么乘法、以什么精度累加。调研覆盖本工程 \texttt{../../references/papers/} 中的全部
+33 份 PDF，并补充了本地集合缺少的代表性一手论文和硬件文档。
+
+最重要的结论是：\textbf{算法标注的位宽不是张量单元的接口定义}。一条量化
+数据通路可拆成
+\begin{equation}
+  \underbrace{(b_W,g_W,s_W)}_{\text{保存格式与粒度}}
+  \times
+  \underbrace{(b_A,g_A,s_A)}_{\text{矩阵单元输入}}
+  \longrightarrow
+  \underbrace{b_{\mathrm{prod}}}_{\text{乘积}}
+  \longrightarrow
+  \underbrace{b_{\mathrm{acc}}}_{\text{部分和/长期累加}}
+  \longrightarrow
+  \underbrace{b_{\mathrm{out}}}_{\text{输出与再量化}}.
+  \label{eq:quant-datapath-contract}
+\end{equation}
+几个名称相近、硬件行为却完全不同的例子是：
+\begin{itemize}
+  \item GPTQ/AWQ 的 W4A16 通常把 INT4 权重解包、反量化，再执行 FP16/BF16 GEMM；
+  \item QServe 的 W4A8 把 UINT4 权重恢复成 INT8，执行
+  $\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}$；
+  \item Atom/QuaRot 明确执行 $\mathrm{INT4}\times\mathrm{INT4}\rightarrow\mathrm{INT32}$；
+  \item KIVI 的 KV2 主要是 cache 保存格式，attention 点积仍在反量化后的
+  FP16/FP32 上执行。
+\end{itemize}
+
+各算法小节只描述动机、量化位置、格式、真实计算路径和客观硬件代价；针对 LLM
+推理张量单元的设计取舍、优先级与实现建议统一汇总在
+\ref{subsec:tensor-unit-design-opinions} 小节。
+
+\subsection{基本量化形式及其硬件含义}
+
+\subsubsection{均匀仿射量化与对称量化}
+
+将浮点数 $x$ 映射为 $b$ bit 整数 $q$ 的一般形式为
+\begin{align}
+  q &= \operatorname{clip}\!\left(
+       \operatorname{round}\!\left(\frac{x}{s}\right)+z,
+       q_{\min},q_{\max}\right), \\
+  \widehat{x} &= s(q-z),
+  \label{eq:affine-quant}
+\end{align}
+其中 $s>0$ 为 scale，$z$ 为 zero-point。对称量化令 $z=0$，常取
+$q\in[-2^{b-1},2^{b-1}-1]$。非对称量化能更充分覆盖偏斜分布，但会给点积
+增加修正项。令量化激活和权重分别为 $Q_X,Q_W$，则
+\begin{align}
+  \sum_{k=1}^{K}(Q_{X,ik}-z_X)(Q_{W,kj}-z_W)
+  ={}&\sum_k Q_{X,ik}Q_{W,kj}
+  -z_W\sum_k Q_{X,ik} \\
+  &-z_X\sum_k Q_{W,kj}+Kz_Xz_W.
+  \label{eq:zero-point-correction-llm}
+\end{align}
+对应的硬件实现可分为两类：在每个乘法前减 zero-point，或保持规则整数 MAC，
+同时生成 row sum/column sum，在 tile 完成后用式
+\eqref{eq:zero-point-correction-llm} 修正。后一种实现把修正移出主 MAC 阵列，但增加
+row/column sum 和 tile-end correction 数据通路。
+
+\subsubsection{粒度决定 scale 能否移出点积}
+
+per-tensor A 和 per-channel W（W 的每个输出通道一个 scale）时，
+\begin{equation}
+  \widehat{Y}_{ij}
+  =s_{X,i}s_{W,j}
+   \sum_{k=1}^{K}Q_{X,ik}Q_{W,kj},
+  \label{eq:outer-scale}
+\end{equation}
+scale 只依赖输出坐标 $(i,j)$，可以在 INT32 点积结束后一次性应用。
+这正是规则 INT8 GEMM 最友好的形式。若 scale 沿归约维分组，设 group size
+为 $G$，则
+\begin{equation}
+  \widehat{Y}_{ij}
+  =\sum_{g=0}^{K/G-1}
+   s_{X,i,g}s_{W,g,j}
+   \underbrace{\sum_{k=gG}^{(g+1)G-1}
+   Q_{X,ik}Q_{W,kj}}_{C_{ij}^{(g)}}.
+  \label{eq:inner-k-scale}
+\end{equation}
+此时不同 group 的 $C_{ij}^{(g)}$ 不能直接在同一 INT32 accumulator 中跨组相加，
+必须先乘 $s_{X,i,g}s_{W,g,j}$，再在 FP16/FP32 或定点统一尺度下汇合。
+所以 group size 不只是元数据选择，它会切断 systolic array 的 $K$ 向连续累加。
+
+常见粒度及硬件代价如下：
+\begin{table}[H]
+  \centering
+  \small
+  \caption{量化粒度、数值收益与硬件代价}
+  \label{tab:quant-granularity-hw}
+  \begin{tabular}{p{2.7cm}p{4.0cm}p{4.0cm}p{3.0cm}}
+    \toprule
+    粒度 & 常见位置 & 数值原因 & 主要硬件代价 \\
+    \midrule
+    per-tensor & 静态 A、简单 PTQ & 元数据最少 & 一个 scale，可移出点积 \\
+    per-token/row & 动态 A & token 间范围差异大 & 在线 amax、每行 scale \\
+    per-channel/col & 静态 W & 输出通道分布不同 & 每列 scale，适合 epilogue \\
+    group-wise & W4、KV2/4 & 限制局部异常值影响 & scale 带宽、group 边界 \\
+    tile/block & FP8、MX、NVFP4 & 局部共享动态范围 & scale layout、scale-aware MMA \\
+    混合精度通道 & LLM.int8、Atom & 隔离异常通道 & 双路径、重排和负载均衡 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{整数点积的累加位宽}
+
+对于 signed $b_A$ bit 与 signed $b_W$ bit 输入，保守的无溢出累加器位宽可按
+\begin{equation}
+  b_{\mathrm{acc}}
+  \gtrsim b_A+b_W+\left\lceil\log_2K\right\rceil
+  \label{eq:int-acc-width}
+\end{equation}
+估算，并额外检查最负数乘积、zero-point 修正、bias 和多 tile 汇合的 guard bits。
+常见实现把 INT4/INT8 点积累加到 INT32；当 $K$ 很大或 accumulator 同时承担
+bias/residual 时，安全位宽还取决于饱和上界与是否分段累加。浮点点积则不能只看 accumulator
+的存储位宽，还要公开乘积对齐、部分和尾数、截断位置、舍入模式和 promotion
+间隔。精确求和论文说明了 superaccumulator 能消除顺序相关误差，但面积和延迟
+使它通常作为数值上界或小范围 early accumulator，而不是每个普通 PE 的默认结构
+\qsrc{ExactSummation}{https://arxiv.org/abs/1505.05571}。
+
+\subsubsection{浮点与 microscaling}
+
+普通 FP8 将每个元素独立编码为 E4M3 或 E5M2；E4M3 精度较高、范围较窄，
+E5M2 范围较大、精度较低\qsrc{FP8Formats}{https://arxiv.org/abs/2209.05433}。
+MX/NVFP4 则把数表示为 private element 和共享 scale 的乘积。OCP MX 的典型点积为
+\begin{equation}
+  y=X_A X_B\sum_{i=0}^{31}P_{A,i}P_{B,i},
+  \label{eq:mx-dot}
+\end{equation}
+其中 32 个 private elements 共享 E8M0 scale，private element 可为
+MXFP8、MXFP6、MXFP4 或 MXINT8\qsrc{OCP-MX}{https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf}。
+NVFP4 使用 E2M1 private element、每 16 元素一个 E4M3 local scale，再乘一个
+tensor 级 FP32 global scale\qsrc{NVFP4}{https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/nvfp4/nvfp4.html}。
+这类格式只有在矩阵指令直接接收 data 与 scale 时才是原生 FP4/MX 计算；若先恢复
+到 FP16，它仍主要是带宽格式。
+
+\subsection{算法全景与阅读口径}
+
+表\ref{tab:algorithm-overview} 先给出最常见方法的定位。后文每个算法均按
+“提出理由---量化位置---格式/粒度---真实硬件计算”展开；设计意见集中放在
+第\ref{subsec:tensor-unit-design-opinions}小节。
+
+\begin{table}[H]
+  \centering
+  \scriptsize
+  \caption{代表性 LLM 量化方法速查}
+  \label{tab:algorithm-overview}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{llllll}
+    \toprule
+    方法 & 类型 & W & A & KV/其他 & 典型主计算 \\
+    \midrule
+    GPTQ & W-only PTQ & INT2/3/4 & FP16 & 高精度 & W 解码后 FP16 GEMM \\
+    AWQ & W-only PTQ & INT3/4-g128 & FP16 & 高精度 & W 解码后 FP16 GEMM \\
+    QLoRA & 量化微调 & NF4 & BF16 & LoRA BF16 & $\mathrm{NF4}\rightarrow\mathrm{BF16}$ GEMM \\
+    LLM.int8() & 混合精度 PTQ & INT8 & INT8+FP16 & FP16 & INT8 GEMM+FP16 分支 \\
+    SmoothQuant & W8A8 PTQ & INT8/col & INT8/token & FP16 & $\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}$ \\
+    QServe & 服务协同 & UINT4 & INT8 & KV4 & $\mathrm{W4}\rightarrow\mathrm{INT8}$，INT8 GEMM \\
+    Atom & 服务协同 & INT4/8 & INT4/8 & KV4 & INT4/INT8 Tensor Core \\
+    QuaRot/SpinQuant & 旋转 PTQ & INT4 & INT4 & KV4 & $\mathrm{INT4}\times\mathrm{INT4}\rightarrow\mathrm{INT32}$ \\
+    KIVI & KV PTQ & FP16 & FP16 & K/V INT2 & 反量化后 FP16 attention \\
+    KVQuant & KV PTQ & FP16 & FP16 & nuq2/3/4 & 查表/修正后 FP16 attention \\
+    Quant.npu & 静态 NPU PTQ & INT4/8 & INT4/8/16 & KV8、非线性16 & 纯整数静态流水线 \\
+    DeepSeek-V3 & 训练 recipe & E4M3 & E4M3 & 状态混合 & FP8 WGMMA+FP32 promotion \\
+    MX/NVFP4 & 格式/recipe & FP4/6/8 & FP4/6/8 & 敏感算子高精度 & scale-aware block MMA \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+\subsection{基础硬件与自动位宽选择方法}
+
+\subsubsection{TPU：规则 INT8 systolic array 基线}
+
+\textbf{理由：}早期数据中心推理需要高吞吐和确定的能效，通用 CPU/GPU 的控制与
+缓存开销过高。第一代 TPU 以规则矩阵乘单元说明了低精度整数阵列的价值
+\qsrc{TPU}{https://arxiv.org/abs/1704.04760}。
+
+\textbf{位置与格式：}神经网络主要乘法采用 8-bit operand，乘积和累加采用更宽
+整数；非线性由独立单元处理。它不是 LLM 量化算法，但确立了“窄乘法、宽累加、
+片上复用”的硬件基线。
+
+\textbf{计算映射：}权重在阵列中复用，activation 沿 systolic 方向传播，PE 执行
+$\mathrm{INT8}\times\mathrm{INT8}$ 并把结果汇入宽 accumulator。其吞吐来自规则数据流、
+权重驻留和片上复用；论文没有覆盖现代 LLM 的动态 scale 与 group epilogue。
+
+\subsubsection{Loom 与 Bit Fusion：位串行和可组合位并行}
+
+Loom 用 bit-serial 方式让执行时间随 W/A 的实际 bit 数近似缩放
+\qsrc{Loom}{https://arxiv.org/abs/1706.07853}；Bit Fusion 把小 bit-brick 动态组合成
+不同位宽的乘法器\qsrc{BitFusion}{https://arxiv.org/abs/1712.01507}。二者提出的原因
+是不同层所需精度不同，固定 8/16-bit 乘法器在低位模型上浪费面积或周期。
+
+bit-serial 的优点是位宽覆盖连续、执行周期随精度变化，缺点是延迟随 bit 数增加，
+控制、部分积与累加网络更复杂。可组合 bit-brick 可让一个 8-bit 资源在 INT8 模式
+形成一个乘积、在 INT4 模式形成多个独立乘积；若外围端口、归约树和 accumulator
+bank 不同步扩展，实际 tile 吞吐不会按乘法 lane 数增长。
+
+\subsubsection{SCNN 与 EIE：稀疏/码本计算不是普通低比特 MAC}
+
+SCNN 跳过稀疏 activation 与 weight 的零值，并采用压缩稀疏数据流
+\qsrc{SCNN}{https://arxiv.org/abs/1708.04485}；EIE 使用剪枝、权重共享和约 4-bit
+码本索引，在片上查表后执行稀疏矩阵向量乘\qsrc{EIE-retrospective}{https://arxiv.org/abs/2306.09552}。
+它们解决的是零值和共享权重带来的访存浪费，而非统一 INT4 GEMM。真实执行路径包含
+index decode、负载均衡和 lookup；它与大 batch/prefill 的稠密矩阵阵列具有不同的
+数据流，在 batch-1 decode 和结构化稀疏场景中更易暴露收益。
+
+\subsubsection{HAQ：以真实硬件反馈搜索逐层位宽}
+
+HAQ 使用强化学习在 2--8 bit 中为各层选择 W/A 位宽，并把真实 latency/energy
+反馈放进约束，而不是只以 FLOPs 或模型大小为代理
+\qsrc{HAQ}{https://arxiv.org/abs/1811.08886}。其价值是揭示同一 bit 配置在不同硬件上
+并不等价：memory-bound 与 compute-bound 层会选择不同精度。它本身不定义新的 MAC；
+搜索结果依赖包含 packing、scale 和小矩阵利用率的 per-mode 代价模型。
+
+\subsubsection{VS-Quant 与 ShapeShifter：细粒度 scale 和有效容器宽度}
+
+VS-Quant 观察到 coarse scale 让少数极值浪费大部分量化级，因此为 16--64 元素向量
+配置 scale，并继续量化 scale 元数据\qsrc{VSQuant}{https://arxiv.org/abs/2102.04503}。
+真实点积变成类似式\eqref{eq:inner-k-scale} 的分组部分和：低比特整数乘加之后，
+每组应用 scale，再跨组高精度相加。其硬件代价集中在 group size、scale cache 和
+group boundary 吞吐，而不只由 operand bit 数决定。
+
+ShapeShifter 不改变数值，只把一组已量化整数放入能无损表示它们的最小容器宽度，
+并配合 bit-serial 单元处理\qsrc{ShapeShifter}{https://dl.acm.org/doi/10.1145/3352460.3358295}。
+它提醒我们区分“量化误差”与“无损打包”：后者可作为 DMA/SRAM 压缩层，但会增加
+变长解码和调度，不应与算法的 INT4 精度混为一谈。
+
+\subsubsection{FAST：可变精度 block floating point 训练}
+
+FAST 将 W/A/G 表示为 block floating point（一个 block 共享 exponent），并采用
+stochastic rounding 与先快后准的可变精度训练策略
+\qsrc{FAST}{https://arxiv.org/abs/2110.15456}。它提出的原因是训练既需要浮点动态范围，
+又希望用近似整数式的规则乘法。对应硬件包含 block exponent 对齐、可配置尾数宽度
+和随机舍入；该方向是 OCP MX 的前驱之一。
+
+\subsection{权重量化算法}
+
+\subsubsection{GPTQ：二阶误差补偿的 W-only PTQ}
+
+\textbf{提出理由：}RTN 在 3/4-bit 大模型上会积累显著误差，而逐权重的 Optimal
+Brain Quantization 复杂度过高。GPTQ 用近似 Hessian 的逆矩阵在逐列量化时补偿剩余
+权重，并通过固定顺序、lazy batch update 和 Cholesky reformulation 把算法扩展到
+百亿级模型\qsrc{GPTQ}{https://arxiv.org/abs/2210.17323}。
+
+对某一行权重 $\vect{w}$，量化第 $q$ 个元素后的典型补偿形式为
+\begin{equation}
+  \delta\vect{w}_{F}
+  =-\frac{w_q-Q(w_q)}{[\mat{H}^{-1}_{F}]_{qq}}
+    (\mat{H}^{-1}_{F})_{:,q},
+  \label{eq:gptq-compensation}
+\end{equation}
+其中 $F$ 是尚未量化的权重集合。
+
+\textbf{位置/格式：}只量化线性层 W，常见 INT4/INT3、per-row asymmetric、
+group size 128；A、KV 和非线性保持 FP16/BF16。
+
+\textbf{真实计算：}算法只产生低比特 W 和 scale/zero，不规定 MAC。常见 kernel
+从 HBM 读取 packed W4，解包并按 group 反量化到 FP16/BF16，与 A16 做 GEMV/GEMM；
+收益主要来自 decode 权重带宽，不提高 FP16 MAC 峰值。只有部署到专门的 mixed-input
+W4A16 单元时，W4 才可能直接成为乘法 operand。
+
+\subsubsection{AWQ：用 activation 识别并保护重要权重}
+
+\textbf{提出理由：}AWQ 发现仅约 0.1--1\% 的 salient weights 对量化误差非常敏感，
+而 salience 由对应输入 activation 的幅值比 W 自身幅值更好地指示。直接保留 FP16
+会形成低效混合稀疏格式，因此 AWQ 用等价通道缩放保护这些权重
+\qsrc{AWQ}{https://arxiv.org/abs/2306.00978}。
+
+对 $Y=XW$，选择输入通道 scale $\vect{s}$，在量化前计算
+\begin{equation}
+  Y=(X\diag(\vect{s})^{-1})
+    Q(\diag(\vect{s})W),
+  \qquad
+  \vect{s}=\operatorname{stat}(X)^{\alpha},
+  \label{eq:awq-scaling}
+\end{equation}
+并搜索 $\alpha$ 与 clipping 使校准误差最小。逆缩放通常可融合到前一算子。
+
+\textbf{位置/格式：}W-only INT3/INT4，常见 group size 128；A16、KV16、非线性16。
+\textbf{真实计算：}与 GPTQ 类似，主流实现是 packed W4 载入、解包/反量化、FP16
+GEMM。AWQ 的创新是离线 W 变换，不是新的 INT4 MAC。
+
+\subsubsection{QLoRA：NF4 冻结权重与低显存微调}
+
+QLoRA 为了在单卡上微调 33B/65B 模型，把冻结基座 W 以 4-bit NormalFloat
+（NF4）保存，只训练 BF16 LoRA adapter\qsrc{QLoRA}{https://arxiv.org/abs/2305.14314}。
+NF4 用适配近正态权重分布的非均匀 16 码点；double quantization 继续压缩 block
+scale，paged optimizer 处理显存峰值。
+
+\textbf{位置/格式：}仅 frozen W 为 NF4；A、G、LoRA、非线性不是 NF4。
+\textbf{真实计算：}NF4 索引查表/反量化为 BF16，再与 BF16 A 做 GEMM，梯度只更新
+LoRA。NF4 是存储码本而非原生 4-bit 乘法格式；原生解码路径包含 16-entry LUT、
+block scale 和 BF16 展开。
+
+\subsubsection{SpQR：低比特稠密主体加稀疏高精度修正}
+
+SpQR 观察到少数权重产生特别大的 Hessian-weighted error，于是把普通 W 以 3/4 bit
+group-wise 量化，把敏感 outlier 和部分元数据高精度稀疏保存
+\qsrc{SpQR}{https://arxiv.org/abs/2306.03078}。
+运行时是“稠密低比特解码路径+稀疏 FP16 修正路径”，A/KV/非线性保持高精度。
+它能提高近无损压缩，但执行时增加稀疏索引、双路径和结果合并；在没有高效稀疏单元
+的设备上，这些开销会降低规则矩阵阵列的利用率。
+
+\subsubsection{QuIP\# 与 AQLM：2-bit 极限压缩}
+
+QuIP\# 用随机 Hadamard incoherence processing 使 W 和 Hessian 的重要方向不再与
+坐标轴对齐，并用 $E_8$ lattice vector codebook 进行极低位量化
+\qsrc{QuIPSharp}{https://arxiv.org/abs/2402.04396}。AQLM 把多个小码本向量相加以重建
+权重，并联合优化 Transformer block\qsrc{AQLM}{https://arxiv.org/abs/2401.06118}。
+
+两者主要量化 W 到约 2--3 bit，A/KV/非线性保持高精度。硬件并不是简单 INT2 MAC：
+需要 Hadamard/rotation、向量查表或多码本 lookup-add，再与 A16 计算；主要收益来自
+极限容量压缩，执行代价集中在 codebook 前端而非普通 PE。
+
+\subsubsection{BitNet b1.58：训练原生三值权重}
+
+BitNet b1.58 将每个权重限制为 $\{-1,0,1\}$，目标是从训练阶段得到约 1.58 bit 的
+原生模型，而非对已有 FP16 LLM 做普通 PTQ\qsrc{BitNet}{https://arxiv.org/abs/2402.17764}。
+权重乘法可退化为对 activation 的加、减或跳过，A 通常仍需更高位量化和 scale。
+这对应无乘法 ternary dot-product，但其模型生态、训练 recipe 和 activation 路径与
+主流 W4/W8 模型不同，属于独立的执行模式。
+
+\subsection{权重--激活联合量化算法}
+
+\subsubsection{LLM.int8()：INT8 主体与 FP16 异常通道分流}
+
+\textbf{提出理由：}当模型扩展到数十亿参数后，activation 中会出现少数幅值约高出
+普通值两个数量级、且跨 token 固定在特定 channel 的 outliers。per-tensor INT8 的
+scale 被这些极值主导，普通值只剩少数有效量化级
+\qsrc{LLM.int8}{https://arxiv.org/abs/2208.07339}。
+
+\textbf{方法与位置：}普通部分使用 vector-wise absmax：A 按 token/row、W 按
+output channel 量化为 INT8；超过阈值的 feature dimensions 从 A/W 中抽出并保持
+FP16。线性层量化，LayerNorm、softmax、GELU/SiLU、residual 与 KV 保持 FP16。
+
+\textbf{真实计算：}
+\begin{equation}
+  Y=\operatorname{dequant}
+  \bigl(Q_{A,\mathrm{reg}}^{\mathrm{i8}}
+        Q_{W,\mathrm{reg}}^{\mathrm{i8}}\bigr)
+  +A_{\mathrm{out}}^{\mathrm{fp16}}
+   W_{\mathrm{out}}^{\mathrm{fp16}},
+  \label{eq:llmint8-two-path}
+\end{equation}
+第一路是 $\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}\rightarrow\mathrm{FP16}$，第二路是小型
+FP16 GEMM，两路最终相加。数值准确，但 gather/scatter、双 kernel、小矩阵低利用率
+和负载不规则使其不如单一路径友好。
+
+\subsubsection{ZeroQuant：细粒度动态量化、蒸馏和后端融合}
+
+ZeroQuant 针对大 Transformer PTQ 的三个问题提出联合方案：W 用 group-wise scale，
+A 用 token-wise dynamic scale，layer-by-layer knowledge distillation 补偿量化误差，
+并把 quant/dequant 融合进后端\qsrc{ZeroQuant}{https://arxiv.org/abs/2206.01861}。
+
+常规配置为 W8A8；更激进配置把 FFN W 降到 INT4、attention W 保持 INT8、A 保持
+INT8。W8A8 可直接映射 INT8 GEMM；W4A8 的实际乘法依赖后端，可能把 W4 解包到
+INT8，也可能走 mixed-input 指令，不能从算法标签推断。若动态 A 量化没有与前一
+归一化/激活或 DMA 搬运融合，“读 FP16 A---求 amax---写 INT8---GEMM 再读”的
+额外往返会抵消整数阵列收益。
+
+\subsubsection{SmoothQuant：把 activation 难度离线迁移到权重}
+
+\textbf{提出理由：}LLM.int8() 准确但双路径低效；per-channel A 量化虽准确，却让
+scale 沿 GEMM 内积维变化，难以映射 Tensor Core。SmoothQuant 利用 outlier channel
+跨 token 的稳定性，把 A 的通道动态范围迁移到更易量化的 W
+\qsrc{SmoothQuant}{https://arxiv.org/abs/2211.10438}。
+
+对 $Y=XW$ 插入可逆对角矩阵 $S$：
+\begin{equation}
+  Y=(XS^{-1})(SW),\qquad
+  s_j=\frac{\max(|X_j|)^{\alpha}}
+  {\max(|W_j|)^{1-\alpha}}.
+  \label{eq:smoothquant}
+\end{equation}
+$S^{-1}$ 可融合到 LayerNorm 或前一权重，$SW$ 离线计算，因此运行时没有 FP16
+outlier branch。
+
+\textbf{位置/格式：}线性层和部分 attention BMM 使用对称 W8A8；常见 W per-channel、
+A per-token dynamic。非线性、归一化、softmax、residual 仍 FP16/BF16。
+
+\textbf{真实计算：}$\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}$，完成 tile 后乘
+$s_{A,i}s_{W,j}$ 并输出 FP16。由于 scale 只依赖输出 row/column，它符合
+式\eqref{eq:outer-scale}，运行时是规则的 INT8 GEMM 加 output epilogue。
+
+\subsubsection{OmniQuant：可学习裁剪与等价变换}
+
+SmoothQuant 的 $\alpha$ 和 clipping 依靠统计/搜索，在 W2/3/4 或 W4A4 下未必最优。
+OmniQuant 用少量校准数据逐 block 重建，Learnable Weight Clipping（LWC）学习 W
+裁剪边界，Learnable Equivalent Transformation（LET）学习 scale/shift，把 A
+outlier 难度迁移到 W\qsrc{OmniQuant}{https://arxiv.org/abs/2308.13137}。
+
+它支持 W4A16、W3A16、W2A16 以及 W4A4/W6A6。算法输出量化整数和参数，不规定
+具体指令；只有后端原生支持相应 operand，W4A4 才会成为 INT4 算力。LET/LWC 多数
+可离线融合；运行时约束来自 A 是否动态、scale 是否沿 $K$ 分组及非线性是否回高精度。
+
+\subsubsection{QServe：W4A8KV4 与服务系统协同}
+
+\textbf{提出理由：}传统 W4A16 只改善小 batch decode 的权重带宽；在大 batch
+serving 中，解包和逐 group FP16 dequant 会占据主循环，无法利用高吞吐 INT8 Tensor
+Core。QServe 的目标是同时保留 W4 带宽和 W8A8 规则计算
+\qsrc{QServe}{https://arxiv.org/abs/2405.04532}。
+
+QoQ progressive quantization 先把 W per-channel 对称量化为保护范围内的 INT8，
+再在 group 内编码为 UINT4。其关系可写成
+\begin{equation}
+  Q_W^{(8)}\approx s_g\bigl(Q_W^{(4)}-z_g\bigr),
+  \label{eq:qserve-progressive}
+\end{equation}
+并选择保护性 INT8 范围，保证 W4 恢复的中间量不饱和。A 为 INT8，KV 为 per-head
+dynamic INT4；算法还组合 rotation、smoothing、reordering 与 clipping。
+
+\textbf{真实计算：}W4 从 HBM 读取后用移位/整数运算恢复为 INT8 寄存器 operand，
+主循环执行 $\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}$；group zero/scale 修正和 FP16 输出
+放在 epilogue。KV4 在 attention kernel 内反量化，QK/PV 与 softmax 仍高精度。
+
+\subsubsection{Atom：INT4 主体、INT8 异常通道和规则重排}
+
+Atom 面向批量 serving，希望真正使用 INT4 Tensor Core，同时避免纯 W4A4 被 A
+outliers 和 group scale 破坏\qsrc{Atom}{https://arxiv.org/abs/2310.19102}。
+它把大多数 W/A 对称量化为 INT4，把少数异常通道设为 INT8；W 离线重排，A 在线
+重排与前算子融合；W 结合 GPTQ，A 使用动态 group scale，KV 为 per-head asymmetric
+INT4。
+
+\textbf{真实计算：}普通连续 tile 执行 $\mathrm{INT4}\times\mathrm{INT4}\rightarrow\mathrm{INT32}$，异常
+tile 执行 INT8 路径。每个 group 的整数部分和先反量化到 FP16，再跨 group 汇合；
+KV4 载入后反量化做 FP16 attention。与 LLM.int8() 相比，高精度分支从 FP16 降到
+INT8，并通过通道重排保持规则访存。
+
+\subsubsection{QuaRot：用正交旋转实现无异常通道 W4A4KV4}
+
+QuaRot 不保留高精度 outlier，而是在不改变全精度函数的前提下插入随机的
+Hadamard 旋转，把异常能量扩散到所有维度
+\qsrc{QuaRot}{https://arxiv.org/abs/2404.00456}。其中一部分旋转可融合进权重和
+RMSNorm；down/out projection 等位置仍可能执行在线 Hadamard。W 常用 GPTQ INT4，
+A 使用对称 per-token INT4，KV 为 INT4。
+
+\textbf{真实计算：}论文 kernel 使用 $\mathrm{INT4}\times\mathrm{INT4}\rightarrow\mathrm{INT32}$，随后乘
+scale 并 cast FP16；RMSNorm core 保持 FP32，block 间信号通常 FP16。KV4 只是 cache
+格式，attention 时恢复高精度。online Hadamard 也会消耗高精度算力，小 batch/短
+context 下其成本可能超过 KV4 节省的 HBM 时间。
+
+\subsubsection{SpinQuant：学习而非随机选择正交基}
+
+SpinQuant 发现不同随机 rotation 的 zero-shot accuracy 可相差十余个百分点，因此
+在保持全精度函数等价和正交约束下学习 rotation
+\qsrc{SpinQuant}{https://arxiv.org/abs/2405.16406}。其主要配置为 W4A4KV4；创新在
+校准阶段寻找更适合量化的坐标系，并未定义新的 4-bit 编码或 MAC。
+
+部署仍需要 QuaRot 类 W4A4 后端；可离线融合部分没有运行时成本，在线部分仍需
+Hadamard/矩阵变换，其计算路径与 QuaRot 相同。
+
+\subsubsection{Quant.npu：面向移动 NPU 的全静态整数 PTQ}
+
+\textbf{提出理由：}GPU 量化常依赖 per-token amax、在线 Hadamard 和 FP16 fallback，
+移动 NPU 的图编译和整数流水线不适合这些动态操作。Quant.npu 因而联合优化静态
+quantization parameters 与 rotation\qsrc{QuantNPU}{https://arxiv.org/abs/2605.20295}。
+
+它采用 per-channel symmetric W、per-tensor static A；保留能离线融合的 rotations
+$R_1/R_2$，删除需在线浮点矩阵乘的 $R_3/R_4$；两阶段优化只学习分布平滑且敏感的
+输入 A/W 参数，其他 tensor 直接静态校准。对删除在线 rotation 后重尾的 down-proj
+输入，以误差指标选择约 10\% 敏感层/通道提升到 INT16。
+
+\textbf{位置/格式：}W/A 可 INT4/8；线性输出和 KV 固定 INT8；SiLU 等非线性、
+embedding 和部分中间量为 INT16；不普遍返回 FP16。
+
+\textbf{真实计算：}部署为 Snapdragon NPU 上的全静态整数图，无在线 amax、无
+FP rotation。线性层使用整数 MAC 与宽累加，算子之间用预先确定的 scale/zero 做
+requantization，非线性走 INT16/LUT/定点路径。
+
+\subsubsection{I-BERT：整数 GELU、softmax 与 LayerNorm}
+
+I-BERT 的目标是解决“线性层 INT8、非线性仍浮点”的断点
+\qsrc{IBERT}{https://arxiv.org/abs/2101.01321}。它通过 QAT 得到 INT8 W/A，并用
+整数多项式、移位、整数平方根等近似 GELU、exp/softmax 和 LayerNorm；线性层执行
+$\mathrm{INT8}\times\mathrm{INT8}\rightarrow\mathrm{INT32}$，层间再量化回 INT8。
+
+它针对 BERT/RoBERTa，未直接解决现代生成式 LLM 的 RMSNorm、SiLU 和 channel
+outlier，但给出了纯整数推理的算法模板：长归约使用比 elementwise 输入更宽的
+accumulator，piecewise polynomial/LUT 与乘移构成非线性执行路径。
+
+\subsection{KV cache 量化算法}
+
+KV cache 在 decode 中逐 token 生成并反复读取，容量和带宽随 batch、层数、head
+dimension 与 context length 线性增长。它不同于静态 W：scale 通常在线产生，而且
+K 与 V 的统计轴不同。绝大多数 KV2/KV4 是\textbf{保存格式}，不是低比特 attention
+MAC；其端到端收益由 cache traffic 的减少与 unpack/dequant 的固定成本共同决定。
+
+\subsubsection{KIVI：K per-channel、V per-token 的 asymmetric INT2}
+
+KIVI 发现 K 的 outliers 固定在少数 feature channels，而 V 的幅值更随 token 变化，
+因此二者不能使用同一量化轴\qsrc{KIVI}{https://arxiv.org/abs/2402.02750}。
+
+历史 K 使用 per-channel asymmetric INT2，历史 V 使用 per-token asymmetric INT2，
+常见 group size 32；最近约 128 个 token 的 residual window 保持 FP16，填满后批量
+量化。W/A/非线性不在该方法范围内。
+
+运行时将 INT2 解包、减 zero、乘 scale 与 matrix-vector attention 融合，QK/PV 和
+softmax 仍以 FP16/FP32 执行。该路径包含 2-bit packed load、K/V 不同地址/scale 布局、
+尾窗与历史块合并，但不执行 INT2 attention MAC。
+
+\subsubsection{KVQuant：非均匀码本、pre-RoPE K 与稀疏异常值}
+
+KVQuant 为极长 context 进一步加入三种机制
+\qsrc{KVQuant}{https://arxiv.org/abs/2401.18079}：K 在 RoPE 前按 channel 量化，避免
+RoPE 破坏稳定的 channel locality；使用 Fisher/sensitivity-weighted non-uniform
+2/3/4-bit codebook；约 1\% outliers 与首个 attention-sink token 保持 FP16。
+
+硬件从低比特 index 查表得到 FP16 value，同时叠加稀疏 FP16 correction，再做高精度
+attention。它以更复杂的 LUT、index 和稀疏元数据换取 KV2/3 精度；per-head KV4
+则具有规则的 nibble packing、地址和 scale 布局。
+
+\subsubsection{规则 KV4 与 FP8 attention}
+
+QServe/Atom 选择 per-head asymmetric KV4，并把解包/反量化融合进 attention kernel；
+QuaRot/SpinQuant 先旋转再存 KV4，减少固定异常方向。相比 INT2/3，INT4 的 nibble
+packing、地址对齐和 SIMD 解码更简单。FlashAttention-3 则研究 H100 上原生 FP8
+attention：Q/K/V 采用 E4M3 block quantization，同时旋转 Q/K 保持 $QK\T$ 不变，
+WGMMA 执行 FP8 点积，softmax 与重标度保持更高精度
+\qsrc{FlashAttention3}{https://arxiv.org/abs/2407.08608}。前者解决长期 cache 带宽，
+后者解决 attention compute，两者不应混为一类。
+
+\subsection{浮点、block floating point 与低精度训练}
+
+虽然当前主要场景是推理，FP16/BF16/FP8/FP4 训练论文对 accumulator、舍入和共享
+scale 的要求直接影响张量单元是否具有可扩展性。训练比推理多出 gradient、master
+weight、optimizer state、Fprop/Dgrad/Wgrad 三类 GEMM 和通信，因此不能用一个
+“全模型 FP8/FP4”概括真实数据通路。
+
+\subsubsection{Mixed Precision Training：FP16 operand 与 FP32 长期状态}
+
+Mixed Precision Training 用 FP16 执行主要 GEMM，保留 FP32 master W、FP32
+accumulation/关键归约，并通过 loss scaling 防止小梯度下溢
+\qsrc{MixedPrecision}{https://arxiv.org/abs/1710.03740}。它确立了此后低精度训练的
+基本原则：乘法输入可以窄，但误差会长期传播的 accumulator、master state 与 update
+需要更宽精度。硬件对应 $\mathrm{FP16}\times\mathrm{FP16}$、FP32 accumulate 的 trans-precision FMA。
+
+\subsubsection{BF16：用指数范围换取较少的 loss scaling 管理}
+
+BF16 保留与 FP32 相同的 8-bit exponent，只缩短 mantissa，因而比 FP16 更不易
+overflow/underflow\qsrc{BF16Study}{https://arxiv.org/abs/1905.12322}。典型路径是
+$\mathrm{BF16}\times\mathrm{BF16}\rightarrow\mathrm{FP32}$ accumulate，敏感更新保留 FP32。
+BF16 对 LLM 大范围激活通常比 FP16 更稳，但 mantissa 精度更低。
+
+\subsubsection{早期 FP8 与 E4M3/E5M2 格式分工}
+
+IBM 的 8-bit 浮点训练研究用短 mantissa 和共享/可调缩放证明 FP8 数值可行性
+\qsrc{IBM-FP8}{https://arxiv.org/abs/1812.08011}；后续 FP8 Formats 提出 E4M3 与
+E5M2 的格式族：forward W/A 常用 E4M3，范围更大的 gradient 常用 E5M2
+\qsrc{FP8Formats}{https://arxiv.org/abs/2209.05433}。这些早期实验不少是在 FP16/FP32
+硬件上先 round 到 FP8 再恢复计算，证明数值可行性，不等于原生 FP8 吞吐。
+
+Efficient PTQ with FP8 进一步比较 E5M2、E4M3、E3M4 等格式在推理 tensor 上的
+范围/精度分工，并展示 FP8 对不同网络的 PTQ 适应性
+\qsrc{FP8PTQ}{https://arxiv.org/abs/2309.14592}。E4M3/E5M2 属于主流格式；E3M4
+等非标准格式会增加额外转换和格式控制路径。
+
+\subsubsection{FP8-LM：把 FP8 从 GEMM 扩展到通信和状态}
+
+FP8-LM 认为只量化 GEMM operand 仍留下大量 gradient communication 和 optimizer
+流量，因此以三档 precision level 逐步量化计算、通信与部分状态
+\qsrc{FP8LM}{https://arxiv.org/abs/2310.18313}。H100 原生 FP8 Tensor Core 执行
+GEMM，但输出、update 与敏感 optimizer state 仍更高精度；过度把所有状态压到 FP8
+会发散。端到端收益还受 collective DMA、cast/scale 和 stochastic rounding 影响。
+
+\subsubsection{DeepSeek-V3：细粒度 E4M3 与周期性 FP32 promotion}
+
+DeepSeek-V3 在 671B MoE 训练中把 Fprop、Dgrad、Wgrad 的 GEMM operand 都设为
+E4M3：A 使用 $1\times128$ tile-wise online scale，W 使用 $128\times128$ block-wise
+scale\qsrc{DeepSeekV3}{https://arxiv.org/abs/2412.19437}。master W 与 batch-accumulated
+G 保持 FP32，AdamW moments 为 BF16；embedding、output head、normalization、
+attention 和 gating 保持 BF16/FP32。
+
+其关键硬件发现是 H800 FP8 WGMMA 的内部部分和只有约 14 bit 有效精度。为避免长
+$K$ 误差，每约 128 个 FP8 乘积把部分和搬到 CUDA Core FP32 register，应用 group
+scale 后继续累加。真实路径因此是
+\begin{equation}
+  \mathrm{E4M3}\times\mathrm{E4M3}
+  \rightarrow \text{低精度局部 partial}
+  \xrightarrow[\text{每 128 项}]{\text{promotion}}
+  \mathrm{FP32\ long\ accumulator}
+  \rightarrow \mathrm{BF16/FP32}.
+  \label{eq:deepseek-fp8-path}
+\end{equation}
+这说明“接口声明 FP32 accumulator”仍不足以描述数值行为；group scale、内部 partial
+精度、promotion 间隔及 Tensor/Vector core 之间的数据往返都是独立的硬件变量。
+
+\subsubsection{OCP MX：标准化局部共享动态范围}
+
+Microscaling Data Formats 让 32 个 private elements 共享 E8M0 scale，定义 MXFP8、
+MXFP6、MXFP4、MXINT8\qsrc{MXFormats}{https://arxiv.org/abs/2310.10537}。训练研究把
+Fprop/Dgrad/Wgrad 的 matmul operand 设为 MX，而 LayerNorm、softmax、GELU、
+residual、master W 保留 BF16/FP32。论文主要用 CUDA 模拟，格式标准本身不证明原生
+吞吐。
+
+硬件若实现式\eqref{eq:mx-dot}，需要同时供给 private data 与 scale，完成 scale
+乘积、部分积对齐和宽归约。MXDOTP 提出 RISC-V 指令，把 MX dot product 合并到一条
+操作，并用内部 FP9 乘积和 95-bit exact fixed-point early accumulator，最后 RNE
+到 FP32\qsrc{MXDOTP}{https://arxiv.org/abs/2505.13159}。这是“窄乘法+精确早期累加+
+单次舍入”的实现证据；95-bit accumulator 的面积/能耗随阵列规模共同增长。
+
+\subsubsection{MX 格式转换器：amax 与编码也需要硬件预算}
+
+FP32-to-MX converter 论文给出支持 E5M2、E4M3、E3M2、E2M3、E2M1、INT8 的
+无存储转换流程\qsrc{MXConverter}{https://arxiv.org/abs/2411.03149}：先对 32 元素求
+最大 exponent，确定共享 scale，再对各 private element 对齐、舍入和饱和。它不选择
+模型量化位置；online microscaling 的转换路径包含 reduction tree、leading-one/
+exponent logic、rounding 和 scale layout，其吞吐与 operand DMA 吞吐共同限制 GEMM。
+
+\subsubsection{NVFP4 与 FP4 All the Way}
+
+NVFP4 的数值为
+\begin{equation}
+  x=x_{\mathrm{E2M1}}\,s_{\mathrm{block}}^{\mathrm{E4M3}}
+    s_{\mathrm{global}}^{\mathrm{FP32}},
+  \label{eq:nvfp4-value}
+\end{equation}
+其中每 16 个 E2M1 元素共享 local scale；训练默认 W 使用 $16\times16$ 2D scale，
+A/G 使用 block-16 1D scale\qsrc{NVFP4}{https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/nvfp4/nvfp4.html}。
+Blackwell \texttt{tcgen05.mma} 原生支持 NVFP4 与 MXFP4 block-scaled MMA，scale
+沿 GEMM-$K$ 维每 16/32 元素应用
+\qsrc{BlackwellCUTLASS}{https://docs.nvidia.com/cutlass/latest/media/docs/cpp/blackwell_functionality.html}。
+
+FP4 All the Way 研究 Fprop/Dgrad/Wgrad 全部采用 NVFP4 数值，并对 gradient 等
+敏感输入使用 stochastic rounding\qsrc{FP4AllTheWay}{https://arxiv.org/abs/2505.19115}。
+其 Gaudi2 实验是软件模拟，证明可训练性而非 FP4 MAC 加速；Blackwell 原生指令才让
+FP4 保存格式与矩阵 operand 一致。即便如此，accumulator、optimizer、master W 和
+非 GEMM 算子仍需更宽精度。
+
+\subsection{本地硬件论文的实现证据}
+
+\subsubsection{SeVeDo：INT4 residual 加高精度低秩路径}
+
+SeVeDo 认为纯 W4A4 精度不足，而每 subgroup 使用高精度 scale 又带来大量浮点操作。
+它把 W 分为高精度低秩 SVD 分量与 INT4 residual；residual 用层次 group scale，
+例如 G128 FP16 base scale 加 G32 低 bit exponent shift；敏感通道走 W8A16/W4A8，
+普通路径走 bit-sliced INT4 dot product
+\qsrc{SeVeDo}{https://arxiv.org/abs/2512.12930}。
+
+其执行包含主 INT4 residual 路径和小型高精度低秩路径；若二者不在同一 output tile
+合并，小矩阵启动与跨单元通信会吞掉理论收益。
+
+\subsubsection{Ascend W4A16：解码单元与 Cube 分离的带宽上限}
+
+Ascend NPU 的 AIV（vector）负责 INT4 解包/反量化并把 FP16 W 写到 global workspace，
+AIC（Cube）再执行 FP16 GEMM；Split-$K$ partial 以 FP32 归约后 cast FP16
+\qsrc{AscendW4A16}{https://arxiv.org/abs/2601.16536}。论文报告受 AIV/AIC 外部 workspace
+交换限制，加速上限约 $1.48\times$，远低于 W4 相对 FP16 的 $4\times$ 压缩比。
+
+该结果表明：当 dequant 与矩阵阵列之间通过 global workspace 交换时，W4 虽减少
+HBM 权重读取，却新增解码后 FP16 W 的大流量。
+
+\subsubsection{TransDot：共享 datapath 的跨精度浮点点积}
+
+TransDot 在统一浮点 datapath 中支持 1-way FP32、2-way FP16、4-way FP8 E4M3、
+8-way FP4 E2M1，并让低精度乘积进入更高精度 accumulator
+\qsrc{TransDot}{https://arxiv.org/abs/2605.07245}。它通过可重构 barrel shifter、
+multi-mode multiplier 与共享归约网络减少为每种格式复制 FPU 的面积。
+
+它不包含 quantizer 或 group scale。FP16/FP8/FP4 模式共享 exponent compare、
+alignment、normalization 与 rounding，packed lane 数随 precision 增长；多 lane
+利用率仍取决于 accumulator bank、寄存器端口和布线是否同步扩展。
+
+\subsubsection{FP8 数据中心 TCO：格式收益取决于系统利用率}
+
+FP8 TCO 分析从功耗、芯片成本、HBM、服务利用率和 LLM 阶段特性比较 FP8 加速器
+\qsrc{FP8TCO}{https://arxiv.org/abs/2502.01070}。它不是量化算法，但强调硬件峰值不能
+直接换算总成本：decode 可能仍受权重/KV 带宽限制，prefill/大 batch 才更能使用
+FP8 compute；prefill/decode 的 arithmetic intensity、阵列利用率和 bytes/token
+会得到不同的端到端结果。
+
+\subsection{异常值处理方法的统一视角}
+
+\begin{table}[H]
+  \centering
+  \scriptsize
+  \caption{异常值与量化误差处理路线}
+  \label{tab:outlier-strategy}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lllll}
+    \toprule
+    路线 & 代表方法 & 核心做法 & 优点 & 主要硬件代价 \\
+    \midrule
+    高精度分流 & LLM.int8、SpQR、KVQuant & 主体低 bit，难点单独保存 & 误差可控 & 双路径/稀疏索引 \\
+    等价平滑 & SmoothQuant、AWQ & W/A 间迁移通道尺度 & 可离线融合 & 只能做对角缩放 \\
+    学习变换 & OmniQuant & 学 scale、shift、clipping & 极低位更稳 & 校准优化较重 \\
+    正交旋转 & QuaRot、SpinQuant & 扩散异常能量 & 无固定异常通道 & online Hadamard \\
+    细粒度 scale & VS-Quant、MX、NVFP4 & 缩短共享范围 & 规则且通用 & scale 元数据/组边界 \\
+    结构分解 & SpQR、SeVeDo & 稀疏/低秩高精度修正 & 精度预算随结构 & 旁路调度与合并 \\
+    非均匀码本 & NF4、QuIP\#、AQLM & 码点匹配分布/向量 & 2--4 bit 精度好 & LUT 与解码 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+这些路线经常组合：QServe 同时使用 rotation、smoothing、reorder 和 clipping；Atom
+组合 INT4/INT8、channel reorder 和 group scale；DeepSeek-V3 组合细粒度 scale 与
+FP32 promotion。它们共同依赖 unpack、amax、scale、LUT、Hadamard、epilogue 等
+可组合 primitive，而非彼此独立的专用算术定义。
+
+\subsection{典型算法标签在硬件中到底算什么}
+
+\begin{table}[H]
+  \centering
+  \scriptsize
+  \caption{保存格式、矩阵 operand 和 accumulator 的区别}
+  \label{tab:real-compute-path}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lllll}
+    \toprule
+    算法/配置 & HBM/SRAM 保存 & 矩阵单元输入 & 累加/输出 & 主要收益/限制 \\
+    \midrule
+    GPTQ/AWQ W4A16 & W INT4，A FP16 & W 解码为 FP16，A FP16 & 宽浮点累加 & W 带宽，不增 FP16 峰值 \\
+    Ascend W4A16 & W INT4，A FP16 & AIV 产 FP16 W & $\mathrm{FP32}\rightarrow\mathrm{FP16}$ & workspace 往返 \\
+    SmoothQuant W8A8 & W/A INT8 & INT8/INT8 & $\mathrm{INT32}\rightarrow\mathrm{FP16}$ & 原生规则整数 GEMM \\
+    QServe W4A8 & W UINT4，A INT8 & W 恢复 INT8，A INT8 & $\mathrm{INT32}\rightarrow\mathrm{FP16}$ & W4 带宽+INT8 峰值 \\
+    Atom/QuaRot W4A4 & W/A INT4 & INT4/INT4 & INT32，组间 FP16/32 & 原生 INT4 峰值 \\
+    QLoRA NF4 & W NF4，A BF16 & W 查表为 BF16 & BF16/FP32 & 微调显存，非 NF4 MAC \\
+    KIVI/KVQuant KV2 & KV INT2/index & 恢复 FP16 & FP16/FP32 attention & KV 带宽，非 INT2 MAC \\
+    QServe/Atom KV4 & KV INT4 & 恢复 FP16 & FP16 attention & 规则 cache 压缩 \\
+    H100/H800 FP8 & E4M3/E5M2 & FP8 WGMMA & 局部 partial+FP32 & 原生 FP8，累加需核对 \\
+    OCP MX & FP4/6/8+E8M0 & block-scaled operand & 通常 FP32 & 需 scale-aware MMA \\
+    Blackwell NVFP4 & E2M1+E4M3 scale & 原生 block FP4 & 宽 accumulator & FP4 保存/计算一致 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+由表\ref{tab:real-compute-path} 可得三条判定规则：
+\begin{enumerate}
+  \item \textbf{低比特保存不等于低比特乘法。}W4/NF4/KV2 可能在乘法前恢复到
+  FP16/BF16；此时收益主要是容量和 HBM 带宽。
+  \item \textbf{低比特乘法不等于低比特累加。}INT4/8 通常落到 INT32，FP8/4
+  通常需要 FP32 或其他宽 accumulator。窄 accumulator 会使长 $K$ 的误差/溢出
+  主导算法精度。
+  \item \textbf{API 输出精度不等于内部部分和精度。}DeepSeek-V3 已展示 FP8 MMA
+  的内部 partial 可能需要软件 promotion；partial-product 精度、rounding 和 promotion
+  间隔是独立于“FP32 accumulate”接口标签的硬件属性。
+\end{enumerate}
+
+\subsection{LLM 推理张量单元设计意见（集中汇总）}
+\label{subsec:tensor-unit-design-opinions}
+
+\subsubsection{三条总原则}
+
+张量单元设计应遵循三条总原则：
+\begin{enumerate}
+  \item 完整定义“保存格式---矩阵 operand---局部 partial---长期 accumulator---输出/
+  requant”，不能只用 W4A8、FP8 等算法标签代替硬件接口；
+  \item 把 unpack、动态量化、scale、zero-point、格式转换和 epilogue 的吞吐与片上流量
+  纳入性能模型，避免低比特数据在进入阵列前被展开并写回大容量中间存储；
+  \item 分开优化 compute-bound 的 prefill/大 batch 与 memory-bound 的小 batch decode，
+  同时把长上下文 KV cache 的带宽视为独立瓶颈。
+\end{enumerate}
+只有 packed 低比特数据直接到达矩阵阵列、group scale 不阻塞归约、长期累加具有足够
+精度和吞吐时，算法位宽下降才会转化为端到端 NPU 吞吐。
+
+\subsubsection{先把 prefill 与 decode 分开}
+
+对线性层 $Y=XW$，prefill 的 $M$（token 数）较大，W 在多个 token 间复用，容易
+compute-bound；decode 尤其 batch-1 时近似 GEMV，每生成一个 token 都要流式读取大 W，
+常为 memory-bound。由此得到：
+\begin{itemize}
+  \item decode 优先受益于 GPTQ/AWQ/QLoRA 类 W-only 压缩，即使主 MAC 仍是 FP16；
+  \item prefill/大 batch 要持续加速，A 也必须降到 INT8/INT4/FP8，并真正进入低比特
+  阵列；
+  \item 长 context decode 还要优化 KV2/4 的 load/dequant；仅提高 GEMM TOPS 不会
+  消除 attention 的 cache 带宽瓶颈。
+\end{itemize}
+
+建议性能报告至少分开给出 prefill token/s、decode token/s、batch/context、阵列
+利用率、HBM bytes/token、scale/zero metadata bytes 和 quant/dequant 时间。
+
+\subsubsection{推荐的计算模式}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{建议的张量单元模式与目标算法}
+  \label{tab:npu-mode-priority}
+  \begin{tabular}{p{2.1cm}p{3.3cm}p{3.5cm}p{4.5cm}}
+    \toprule
+    优先级 & operand & accumulator & 主要覆盖 \\
+    \midrule
+    P0 & $\mathrm{INT8}\times\mathrm{INT8}$ & INT32 & SmoothQuant、ZeroQuant、QServe 恢复路径 \\
+    P0 & $\mathrm{INT4}\times\mathrm{INT4}$ & INT32 & Atom、QuaRot、SpinQuant、W4A4 \\
+    P0/P1 & $\mathrm{INT4}\times\mathrm{INT8}$ & INT32 & mixed-input、异常 tile、减少恢复带宽 \\
+    P0 & FP16/BF16 同类乘法 & FP32/宽累加 & baseline、W4A16 解码、非量化层 \\
+    P1 & E4M3/E5M2 同类乘法 & FP32 长期累加 & FP8 PTQ/训练、FP8 attention \\
+    P2 & MXFP4/NVFP4 block MMA & FP32/精确 early acc & 后续 FP4/MX 生态 \\
+    可选 & ternary 与 INT8/16 & INT32 & BitNet b1.58 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+INT4/INT8 最适合用可分解乘法阵列：一个 8-bit 物理资源可在 INT8 模式形成一个
+乘积，在 INT4 模式形成多路独立乘积。实现时必须同时复制/分 bank accumulator，
+并提高 operand FIFO、SRAM 和 NoC 的每周期元素数。只把乘法器切成四路、而输出归约
+仍是一条，会得到很高的理论 TOPS 和很低的实际利用率。
+
+\subsubsection{算法特定的前端与旁路}
+
+主张量阵列之外的前端和旁路决定量化算法能否获得端到端收益，建议按以下层次实现：
+\begin{itemize}
+  \item \textbf{W-only 基线路径：}为 GPTQ/AWQ 提供 W4 流式解包、group scale 广播和
+  W4A16 fused GEMV/GEMM；反量化后的 FP16/BF16 权重应直接进入 operand FIFO，避免
+  写回 SRAM/HBM。
+  \item \textbf{W4A8 恢复路径：}为 QServe 在阵列供数速率下完成 UINT4 unpack、
+  zero-point 与 scale 修正并恢复 INT8，恢复后的 W8 直接馈入 INT8 阵列，不建立完整
+  W8 workspace。
+  \item \textbf{混合精度与异常 tile：}为 LLM.int8()/Atom 提供通道重排描述符、连续
+  outlier tile、INT4/INT8 mode 切换以及组间宽精度汇合，避免在同一个 systolic wave
+  内逐元素切换位宽。
+  \item \textbf{旋转量化：}QuaRot/SpinQuant 中可离线融合的旋转不占运行时资源；仍需
+  在线执行的 Hadamard 使用 butterfly/shuffle vector path，并与 quantize、pack 融合，
+  避免高精度中间量往返 HBM。
+  \item \textbf{KV cache：}提供 INT2/4 packed load、K/V 独立的 scale 地址模式、尾窗/
+  历史块合并和 fused dequant-attention；规则 KV4 应作为高吞吐基线，KV2/3 非均匀码本
+  再通过可选 LUT、index 与稀疏 correction 前端扩展。
+  \item \textbf{码本与稀疏权重：}NF4、SpQR、QuIP\#/AQLM 所需的 lookup、index decode
+  和稀疏高精度 correction 适合放在可选解码前端，而不是侵入每个 PE 的主乘法数据通路。
+  \item \textbf{纯整数非线性：}Quant.npu/I-BERT 路线需要 INT16 vector ALU、宽 reduction、
+  定点 requant、整数 reciprocal/rsqrt/exp 以及 LUT/分段多项式旁路。
+  \item \textbf{FP8/FP4/MX：}在线 amax、cast、scale 生成应与 DMA/producer 融合；阵列需
+  明确定义 scale-aware $K$ group、partial-product 精度、rounding 和 promotion 间隔。
+  非标准 block 格式只有在目标模型和软件栈稳定后再进入 P0/P1 固化范围。
+  \item \textbf{双路径分解：}SeVeDo 类高精度低秩分支与 INT4 residual 分支应在同一
+  output tile 内合并，避免小矩阵启动和跨单元传输抵消压缩收益。
+\end{itemize}
+
+\subsubsection{建议的 tile 数据通路}
+
+一个输出驻留（output-stationary）tile 可按下列阶段组织：
+\begin{enumerate}
+  \item \textbf{Load/Decode：}DMA 从 HBM/SRAM 读取 packed W/A；执行 nibble/2-bit
+  unpack、符号扩展或 codebook lookup。GPTQ/AWQ 的 W4A16 可在这里反量化，QServe
+  则只恢复到 INT8。
+  \item \textbf{Quantize/Scale staging：}静态 scale 从片上 scale SRAM 广播；动态 A
+  在 RMSNorm/SiLU 输出或 DMA 搬运时并行求 amax、round 和 pack。scale 与 operand
+  使用独立但对齐的 FIFO。
+  \item \textbf{Tensor MAC：}INT4/8 使用 INT32 accumulator；FP16/BF16/FP8 使用
+  宽浮点或分段 promotion。普通 per-row/per-col scale 不进入 MAC critical path。
+  \item \textbf{Group boundary：}若 scale 沿 $K$ 变化，完成 $C_{ij}^{(g)}$ 后应用
+  $s_{A,i,g}s_{W,g,j}$，在 FP32 或统一定点尺度下汇入 long accumulator。
+  \item \textbf{Epilogue：}zero-point row/col correction、bias、residual、activation、
+  clamp 和 requant 尽量一次完成，只写最终 INT8/FP16/BF16 输出。
+\end{enumerate}
+
+可概括为
+\begin{equation}
+  \begin{aligned}
+    \boxed{\text{packed load}}
+    &\rightarrow\boxed{\text{unpack/amax/scale}}
+    \rightarrow\boxed{\text{low-bit tensor MAC}}\\
+    &\rightarrow\boxed{\text{wide/group accumulator}}
+    \rightarrow\boxed{\text{fused epilogue}}.
+  \end{aligned}
+  \label{eq:recommended-npu-pipeline}
+\end{equation}
+
+\subsubsection{scale、zero-point 与元数据结构}
+
+建议 scale SRAM 至少支持四种地址模式：per-tensor constant、A per-row、W per-column、
+inner-$K$ group/tile。每个 output tile 应能同时广播 row scale 和 column scale；group
+scale 要与 $K$ counter 锁步。zero-point 路径建议提供：
+\begin{itemize}
+  \item operand 前减零点的简单模式，适合小 tile 或低吞吐 vector path；
+  \item row sum/column sum accumulator 与 tile-end correction，适合主 tensor array；
+  \item symmetric fast path，完全 bypass zero-point 逻辑，覆盖 SmoothQuant、QuaRot 等。
+\end{itemize}
+
+metadata 也必须纳入有效 bit 数。例如 W4-g32 每 32 个元素一个 16-bit scale，光 scale
+就增加 $16/32=0.5$ bit/weight；若再有 zero-point、稀疏索引或 codebook，实际压缩率
+会明显低于“4 bit”。
+
+\subsubsection{非线性与整数端到端路径}
+
+LLM inference 的矩阵 FLOPs 占主导，但如果每层都在 INT 与 FP 之间往返，vector
+算子会成为 latency 和 SRAM traffic 瓶颈。建议至少提供：
+\begin{itemize}
+  \item $\mathrm{INT32}\rightarrow\mathrm{INT8/16}$ 的定点乘加、round-to-nearest-even、saturation；
+  \item INT16 vector ALU 和宽 reduction，覆盖 RMSNorm/SiLU 的 Quant.npu 路线；
+  \item 小型可编程 LUT 或分段多项式，用于 exp、reciprocal、rsqrt、SiLU/GELU；
+  \item residual 两输入 scale 对齐和 fused add-requant；
+  \item FP16/BF16 fallback，但应统计其带来的格式转换和片上流量。
+\end{itemize}
+
+\subsubsection{验证与 benchmark 清单}
+
+张量单元 RTL/模型应至少覆盖：
+\begin{enumerate}
+  \item INT8 对称 per-row/per-col：随机 $M,N,K$、极值、INT32 溢出边界；
+  \item INT8 非对称：逐 MAC 减零点与 row/col correction 两实现逐 bit 等价；
+  \item INT4 打包：奇偶 nibble、signed/unsigned、尾 tile、$\mathrm{INT4}\times\mathrm{INT8}$；
+  \item group scale：$K$ 非 group size 整数倍、跨 group FP32/定点汇合；
+  \item FP16/BF16/FP8：NaN/Inf/subnormal（若支持）、RNE、饱和、promotion interval；
+  \item 端到端 kernel：SmoothQuant W8A8、QServe W4A8、AWQ W4A16、QuaRot W4A4、
+  KIVI/KV4 attention load/dequant；
+  \item prefill 与 decode 分开做 roofline，对 unpack、amax、scale、epilogue 分项计时。
+\end{enumerate}
+
+\subsubsection{按应用场景选择算法}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{按应用瓶颈选择量化路线}
+  \label{tab:algorithm-selection}
+  \begin{tabular}{p{3.2cm}p{5.1cm}p{5.0cm}}
+    \toprule
+    目标场景 & 优先算法/格式 & 硬件重点 \\
+    \midrule
+    batch-1/小 batch decode & AWQ/GPTQ W4A16，必要时 SpQR & W4 流式解包、FP16 GEMV、scale 融合 \\
+    云端大 batch/prefill & SmoothQuant W8A8、QServe W4A8 & INT8 阵列与高吞吐 $\mathrm{W4}\rightarrow\mathrm{W8}$ \\
+    原生 4-bit compute & Atom/QuaRot/SpinQuant W4A4 & INT4 阵列、group epilogue、重排/Hadamard \\
+    长 context & KIVI/KVQuant 或规则 KV4 & packed KV load、异粒度 scale、融合 dequant \\
+    移动全静态 NPU & Quant.npu、I-BERT 类 & INT4/8 GEMM、INT16 vector、LUT/requant \\
+    FP8 推理/训练扩展 & E4M3/E5M2、DeepSeek recipe & 在线 scale、FP32 promotion、DMA 融合 \\
+    后续 FP4 训练/推理 & MXFP4/NVFP4 & 原生 block scale MMA、SR、scale layout \\
+    极限容量 & QuIP\#/AQLM/BitNet & codebook/rotation 或 ternary 专用路径 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{逐篇文献覆盖清单}
+
+以下清单用于确认 \texttt{../../references/papers/} 中的每份 PDF 均已纳入调研。括号内给出本文使用
+它的主要角度；其中若干是硬件/数值背景，并非 LLM 量化算法。
+
+\begin{enumerate}[label=\textbf{L\arabic*.},leftmargin=3.4em]
+  \item \texttt{1505.05571v1.pdf}: Fast Exact Summation（累加精度与可重复性上界）。
+  \item \texttt{1704.04760v1.pdf}: TPU（INT8 systolic array 硬件基线）。
+  \item \texttt{1706.07853v2.pdf}: Loom（W/A 位串行精度缩放）。
+  \item \texttt{1708.04485v1.pdf}: SCNN（压缩稀疏数据流）。
+  \item \texttt{1710.03740v3.pdf}: Mixed Precision Training（FP16 operand、FP32 状态）。
+  \item \texttt{1712.01507v2.pdf}: Bit Fusion（可组合 bit-brick）。
+  \item \texttt{1811.08886v3.pdf}: HAQ（硬件反馈混合位宽搜索）。
+  \item \texttt{1812.08011v1.pdf}: 8-bit floating point training（早期 FP8 数值方案）。
+  \item \texttt{1905.12322v3.pdf}: BFLOAT16 study（BF16 训练与范围）。
+  \item \texttt{2102.04503v1.pdf}: VS-Quant（per-vector scale）。
+  \item \texttt{2110.15456v1.pdf}: FAST（可变精度 block floating point）。
+  \item \texttt{2208.07339v2.pdf}: LLM.int8()（异常通道混合精度）。
+  \item \texttt{2209.05433v2.pdf}: FP8 Formats（E4M3/E5M2）。
+  \item \texttt{2210.17323v2.pdf}: GPTQ（二阶 W-only PTQ）。
+  \item \texttt{2211.10438v7.pdf}: SmoothQuant（规则 W8A8）。
+  \item \texttt{2306.00978v6.pdf}: AWQ（activation-aware W4）。
+  \item \texttt{2306.09552v1.pdf}: EIE retrospective（稀疏与 4-bit codebook）。
+  \item \texttt{2309.14592v2.pdf}: FP8 PTQ（推理格式选择）。
+  \item \texttt{2310.10537v3.pdf}: Microscaling Data Formats（MX 训练与格式）。
+  \item \texttt{2401.18079v6.pdf}: KVQuant（非均匀 KV2/3/4）。
+  \item \texttt{2402.02750v2.pdf}: KIVI（K/V 异粒度 INT2）。
+  \item \texttt{2405.04532v3.pdf}: QServe（W4A8KV4 系统协同）。
+  \item \texttt{2407.08608v2.pdf}: FlashAttention-3（原生 FP8 attention）。
+  \item \texttt{2411.03149v1.pdf}: FP32-to-MX converter（在线格式转换硬件）。
+  \item \texttt{2502.01070v4.pdf}: FP8 datacenter TCO（系统利用率分析）。
+  \item \texttt{2505.13159v1.pdf}: MXDOTP（scale-aware dot-product ISA）。
+  \item \texttt{2505.19115v2.pdf}: FP4 All the Way（NVFP4 全量化训练数值）。
+  \item \texttt{2512.12930v2.pdf}: SeVeDo（低秩高精度+INT4 residual）。
+  \item \texttt{2601.16536v2.pdf}: Ascend W4A16（解码/矩阵核分离的带宽瓶颈）。
+  \item \texttt{2605.07245v1.pdf}: TransDot（跨精度共享浮点 datapath）。
+  \item \texttt{2605.20295v1.pdf}: Quant.npu（全静态纯整数移动 NPU）。
+  \item \texttt{3352460.3358295.pdf}: ShapeShifter（有效位宽无损容器）。
+  \item \texttt{OCP\_Microscaling Formats (MX) v1.0 Spec\_Final.pdf}: MX v1.0 标准。
+\end{enumerate}
+
+补充检索的一手资料包括 I-BERT、ZeroQuant、QLoRA、SpQR、OmniQuant、Atom、
+QuaRot、SpinQuant、FP8-LM、DeepSeek-V3、QuIP\#、AQLM、BitNet b1.58，以及
+NVIDIA NVFP4/Blackwell block-scaled MMA 官方文档；它们的原文链接已放在对应算法
+小节中，因此本文件不依赖 \texttt{refs.bib} 的额外条目。
+
+\subsection{小结}
+
+LLM 量化的演进并不是所有位置同步从 16 bit 降到 8 bit 再降到 4 bit。W 静态且
+decode 中受带宽限制，最早下降到 INT4/NF4/甚至 2 bit；A 动态且存在异常通道，
+需要分流、平滑、旋转或细粒度 scale 才能从 INT8/FP8 走向 INT4/FP4；KV 的容量
+随 context 增长，因而迅速走向 INT2/4，但 attention arithmetic 仍普遍较高精度；
+非线性、归一化和 accumulator 包含长归约或误差传播，位宽下降最慢。

@@ -1,0 +1,24 @@
+# Smoke configuration for the W_align bit-width selection experiment.
+# Fresh inputs only: no source_run, no historical reuse.  Runs in seconds.
+mode: widthselect_align
+M: 2
+N: 32
+K_list: [32, 64]
+formats: [mx_fp8, tf32]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+  - {activation_distribution: uniform, weight_distribution: uniform}
+  - {activation_distribution: positive, weight_distribution: positive}
+seeds: [1]
+pairs_per_seed: 1
+W_align_list: [21, 25]
+# Optional thresholds.  Without them the analysis only reports results.
+pass_criteria:
+  min_bit_match_rate: 0.5
+  max_ulp_p99: 4
+  nonfinite_policy: ignore
+output_root: results/numerical/widthselect/runs
+run_name: widthselect_smoke

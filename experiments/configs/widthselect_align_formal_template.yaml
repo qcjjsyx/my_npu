@@ -1,0 +1,31 @@
+# Formal template -- experiment 1 (W_align scan).  NOT executed in this round.
+# Fresh inputs only.  One mode per run so the isolated experiments stay isolated.
+#
+# The W_acc scan and the joint verification have their own templates:
+#   configs/widthselect_acc_formal_template.yaml
+#   configs/widthselect_joint_formal_template.yaml
+# A single run never scans both widths (no default 2-D sweep).
+# See docs/mac_width_selection.md sections 3-5.
+mode: widthselect_align
+M: 32
+N: 32
+K_list: [128, 256, 512, 1024, 2048, 4096,8192,16384]
+formats: [mx_fp8, tf32]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+  - {activation_distribution: uniform, weight_distribution: uniform}
+  - {activation_distribution: positive, weight_distribution: positive}
+seeds: [1, 2, 3, 4, 5]
+pairs_per_seed: 2
+W_align_list: [18, 21, 24, 27,30,32,34]
+# pass_criteria is intentionally omitted: report-only until the user fixes thresholds.
+# pass_criteria:
+#   min_bit_match_rate: 0.95
+#   max_ulp_p99: 1
+#   max_ulp_max: 4
+#   nonfinite_policy: reject
+output_root: results/numerical/widthselect/runs
+run_name: null

@@ -1,0 +1,15 @@
+# MXFP8 smoke run (current input scheme: numeric-domain FP32 -> G32 MXFP8).
+# Includes pairs_per_seed=2 so distinct pair streams are exercised.
+mode: mx_matrix_sweep
+M: 2
+N: 32
+K_list: [32, 64]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1]
+pairs_per_seed: 2
+output_root: results/numerical/mxfp8/runs
+run_name: mx_smoke

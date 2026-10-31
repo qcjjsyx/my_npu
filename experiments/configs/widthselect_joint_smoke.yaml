@@ -1,0 +1,17 @@
+# Smoke configuration for the joint verification (W_align x W_acc).
+# Only the explicitly listed combinations run; there is no default 2-D sweep.
+mode: widthselect_joint
+M: 2
+N: 32
+K_list: [32, 64]
+formats: [mx_fp8, tf32]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: uniform, weight_distribution: uniform}
+seeds: [1]
+pairs_per_seed: 1
+joint_pairs:
+  - {w_align: 21, w_acc: 16}
+  - {w_align: 25, w_acc: 20}
+output_root: results/numerical/widthselect/runs
+run_name: widthselect_joint_smoke

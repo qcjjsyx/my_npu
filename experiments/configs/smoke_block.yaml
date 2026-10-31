@@ -1,0 +1,9 @@
+# Smoke B sweep: explicit W, paired-prefix snapshots over the full default B list.
+mode: block_sweep
+formats: [fp8_e4m3, tf32]
+distributions: [positive, uniform, exponent_gaussian, cancellation, laplace, student_t3, outlier]
+seeds: [1]
+samples_per_seed: 2
+W: 32
+cancellation_sign_mode: greedy
+output_root: results/numerical/dot_product/runs

@@ -1,0 +1,30 @@
+# MXFP8 formal experiment template (NOT executed by this delivery).
+#
+# Current input scheme: numeric-domain sampling -> FP32 matrices (raw bits saved)
+# -> G32 MXFP8 input quantization -> exact reference / dot16+FP32 accumulation
+# -> offline MX output quantization comparison.
+#
+# Measured (single pair, temporary directory): M=16, N=64, K=16384, one snapshot:
+# 55.7 s, 8.4 MB (inputs.jsonl.gz 7.7 MB, dominated by the FP32 raw bits).
+# This template has 10 K points and per (activation, weight) combination
+# 5 seeds x 2 pairs = 10 pairs; 4 same-distribution combinations -> 40 pairs.
+# Extrapolated totals: about 40 min single-thread and about 350 MB disk; offline
+# analysis a few minutes and a few hundred MB RAM.  Going to 500 pairs per
+# combination (2000 pairs) is a 50x increase over the 40 pairs here.
+#
+# The 0-event mismatch observations in smoke/pilot are descriptive only: elements
+# and K prefixes are correlated and the independent unit is the matrix pair; the
+# template does not promise to resolve any very low mismatch rate.
+mode: mx_matrix_sweep
+M: 16
+N: 64
+K_list: [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1, 2, 3, 4, 5]
+pairs_per_seed: 2
+output_root: results/numerical/mxfp8/runs
+run_name: mx_formal

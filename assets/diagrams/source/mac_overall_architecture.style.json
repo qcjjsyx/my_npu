@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    "multiply_array",
+    "partial_sum"
+  ],
+  "fill": "#fad4d4",
+  "stroke": "#d64545",
+  "purpose": "突出 M 和 PSUM 的精度融合",
+  "geometry": "unchanged"
+}

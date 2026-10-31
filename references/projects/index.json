@@ -1,0 +1,78 @@
+{
+  "snapshot_date": "2026-10-31",
+  "note": "Read-only local metadata; repositories moved intact.",
+  "projects": [
+    {
+      "name": "NVDLA-hw",
+      "origin": "https://github.com/qcjjsyx/NVDLA-hw.git",
+      "head": "8e06b1b9d85aab65b40d43d08eec5ea4681ff715",
+      "local_status": "M vmod/nvdla/cmac/NV_NVDLA_CMAC_CORE_MAC_mul.v"
+    },
+    {
+      "name": "SCALE-Sim",
+      "origin": "https://github.com/qcjjsyx/SCALE-Sim.git",
+      "head": "9f98c4371055a54c75209c2e02b640b897550532",
+      "local_status": ""
+    },
+    {
+      "name": "XtraMAC",
+      "origin": "https://github.com/Xtra-Computing/XtraMAC.git",
+      "head": "ea0265d303a9e6d89e5f5628330b3eab6d98f42a",
+      "local_status": ""
+    },
+    {
+      "name": "chisel-npu",
+      "origin": "https://github.com/mpskex/chisel-npu.git",
+      "head": "3e0d1314e9572c17fb40f206f0d1e7a72a80b663",
+      "local_status": "D driver/linux/tests/data/datafile_32M.bin\n D driver/linux/tests/data/datafile_32M.out.bin"
+    },
+    {
+      "name": "coralnpu",
+      "origin": "https://github.com/qcjjsyx/coralnpu.git",
+      "head": "72d700ef724669163e1b6f88e8622676ef6b0a74",
+      "local_status": "M hdl/chisel/src/coralnpu/SRAM.scala"
+    },
+    {
+      "name": "garuda-accelerator",
+      "origin": "https://github.com/certainly-param/garuda-accelerator.git",
+      "head": "46a8718e2e01514c6573ac674ff747e07d86935b",
+      "local_status": ""
+    },
+    {
+      "name": "gemmini",
+      "origin": "https://github.com/qcjjsyx/gemmini.git",
+      "head": "8c3f9923a44a2fe2c7930587be297d6d4f8c09ca",
+      "local_status": ""
+    },
+    {
+      "name": "lambda-mate",
+      "origin": "https://github.com/LonghornSilicon/lambda-mate.git",
+      "head": "e5931b910b1bbd6c78326292d65cffb0f4d237aa",
+      "local_status": ""
+    },
+    {
+      "name": "pccx-FPGA-NPU-LLM-kv260",
+      "origin": "https://github.com/pccxai/pccx-FPGA-NPU-LLM-kv260.git",
+      "head": "d73cef1bb3d87aa05027d632aebc99971c4355e6",
+      "local_status": ""
+    },
+    {
+      "name": "redmule",
+      "origin": "https://github.com/pulp-platform/redmule.git",
+      "head": "7fa9fbe8a29e8572810ae12b92c19749045ac860",
+      "local_status": ""
+    },
+    {
+      "name": "tiny-NPU",
+      "origin": "https://github.com/harishsg993010/tiny-NPU.git",
+      "head": "8216c22b762011aa20c05fc2768423fd12dda59d",
+      "local_status": ""
+    },
+    {
+      "name": "vortex",
+      "origin": "https://github.com/vortexgpgpu/vortex.git",
+      "head": "d76b7f24e658867ab57e3942d7c648c3e6af072d",
+      "local_status": ""
+    }
+  ]
+}

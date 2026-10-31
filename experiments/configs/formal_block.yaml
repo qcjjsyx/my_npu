@@ -1,0 +1,11 @@
+# Formal B sweep (executed 2026-09-17: results/block_sweep_20260916_152916_0144683e).
+# W is REQUIRED and must be chosen explicitly by the operator.  There is no
+# default and no "optimal" W in this project.
+mode: block_sweep
+formats: [fp8_e4m3, tf32]
+distributions: [positive, uniform, exponent_gaussian, cancellation, laplace, student_t3, outlier]
+seeds: [1, 2, 3, 4, 5]
+samples_per_seed: 2000
+W: 24  # operator-confirmed value for the executed B experiment
+cancellation_sign_mode: greedy
+output_root: results/numerical/dot_product/runs

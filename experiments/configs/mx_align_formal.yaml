@@ -1,0 +1,31 @@
+# Fixed-W_align formal K/B sweep (NOT executed by this delivery).
+#
+# Reuses the MXFP8 inputs already saved by results_mx/mx_formal (40 matrix
+# pairs, 400 snapshots, input run id mx_formal).  The run rebuilds the no-window
+# S/L1/R and verifies them exactly against the source snapshots before writing
+# the aligned candidate trajectory.
+#
+# Expected: 4 combinations x 5 seeds x 2 pairs = 40 matrix pairs,
+# 40 x 10 K = 400 alignment snapshots, 409,600 output elements,
+# 12,800 output groups.
+#
+# Cost (source inputs are reused; no re-sampling): the per-pair cost is the
+# X/W decode plus the aligned dot16 path and S/L1/T exact accumulation, plus
+# re-verification of the source snapshots.  Measured smoke is only M=2/N=32; a
+# measured single-pair estimate for M=16/K=16384 at W_align=21 is recorded in
+# docs/verification.md section 11 before this template is executed.
+mode: mx_alignment_sweep
+M: 64
+N: 64
+K_list: [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+W_align: 21
+distribution_pairs:
+  - {activation_distribution: gaussian, weight_distribution: gaussian}
+  - {activation_distribution: laplace, weight_distribution: laplace}
+  - {activation_distribution: student_t3, weight_distribution: student_t3}
+  - {activation_distribution: outlier, weight_distribution: outlier}
+seeds: [1, 2, 3, 4, 5]
+pairs_per_seed: 2
+source_run: null
+output_root: results/numerical/mx_alignment/runs
+run_name: mx_align_formal

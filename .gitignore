@@ -1,0 +1,76 @@
+# ============================================================
+# 多精度 MAC 项目 .gitignore
+# 被忽略的文件仍保留在本地，只是不进入 Git 版本库；
+# 确需纳入某个被忽略的文件时，可用 git add -f <path>。
+# ============================================================
+
+# ---------- Python 虚拟环境与缓存 ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ---------- 系统与编辑器临时文件 ----------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ---------- 参考文献：排除论文原文，保留目录索引 ----------
+references/papers/*.pdf
+
+# ---------- 外部开源项目工作副本：排除仓库，保留索引 ----------
+references/projects/*/
+
+# ---------- 归档材料：原始压缩包、历史环境、实践报告等 ----------
+/archive/
+
+# ---------- 毕业论文与个人毕设材料 ----------
+/thesis/
+
+# ---------- 实验运行数据、派生结果与检查日志 ----------
+/results/
+
+# ---------- 测试向量：数据可由生成器重建，保留说明 ----------
+/hardware/verification/vectors/*
+!/hardware/verification/vectors/vectors_readme.txt
+
+# ---------- 图稿：排除导出/生成图，保留可编辑源与提示词 ----------
+/assets/diagrams/generated/
+/assets/diagrams/exports/
+/assets/figures/*
+!/assets/figures/*.txt
+
+# ---------- 仿真/综合临时产物 ----------
+*.vcd
+*.fst
+*.ghw
+*.vvp
+*.wlf
+*.wdb
+*.jou
+xsim.dir/
+simv
+simv.daidir/
+obj_dir/
+
+# ---------- 构建与打包产物 ----------
+build/
+dist/
+
+# ---------- LaTeX 中间文件 ----------
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc

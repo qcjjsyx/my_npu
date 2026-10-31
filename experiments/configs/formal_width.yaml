@@ -1,0 +1,11 @@
+# Formal W sweep (executed 2026-09-16/17: results/width_sweep_20260916_152839_ee61f8e7).
+# Estimated scale: 2 formats x 7 distributions x 5 seeds x 2000 samples x 64 blocks x 24 W
+# reductions = ~21.5M block-W reductions plus ~2.1M exact products.
+mode: width_sweep
+formats: [fp8_e4m3, tf32]
+distributions: [positive, uniform, exponent_gaussian, cancellation, laplace, student_t3, outlier]
+seeds: [1, 2, 3, 4, 5]
+samples_per_seed: 2000
+B: 64
+cancellation_sign_mode: greedy
+output_root: results/numerical/dot_product/runs

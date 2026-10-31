@@ -1,0 +1,9 @@
+# Smoke W sweep: full W=18..41 scan with very small samples and small B.
+mode: width_sweep
+formats: [fp8_e4m3, tf32]
+distributions: [positive, uniform, exponent_gaussian, cancellation, laplace, student_t3, outlier]
+seeds: [1]
+samples_per_seed: 2
+B: 8
+cancellation_sign_mode: greedy
+output_root: results/numerical/dot_product/runs
