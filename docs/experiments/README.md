@@ -43,7 +43,7 @@
 
 [历史位宽分析](../../results/numerical/widthselect/analysis/)保留汇总、manifest 和图片，对应[支撑报告](../../thesis/supporting_reports/results_width.md)。[Q_S_shared.csv](../../results/numerical/mx_alignment/imports/Q_S_shared.csv)为原无扩展名 CSV 的保留副本；原数值运行日志在 `results/numerical/history/logs/`。
 
-旧 README 提及的正式 W/B run、MX 正式输入、正式位宽原始 run 及 `archive/legacy_20260916_190730/` 在当前资料中均未找到，现有 `models.zip` 也不含这些数据。无法用现有资料完整重放相关正式实验。历史 manifest 中的原始路径和 digest 保持原值，见[迁移说明](../project/migration.md)。
+旧 README 提及的正式 W/B run、MX 正式输入、正式位宽原始 run 及 `archive/legacy_20260916_190730/` 在当前资料中均未找到，现有 `models.zip` 也不含这些数据。无法用现有资料完整重放相关正式实验。历史 manifest 中的原始路径和 digest 保持原值。
 
 `mx_align_prefix_replay.yaml` 需要缺失的 MX 正式输入，当前不可直接运行；可用 fresh 输入的 `mx_align_smoke.yaml` 检查功能。本次新生成的小规模实验不补写为旧正式实验。
 

@@ -17,6 +17,6 @@
 
 四类实验与本地链接的[机器报告](../../results/verification/check_20261031_183148_650797/report.json)保存了实际输出目录。测试完成输出和 TXT 结果分别记录在[回归摘要](../../results/verification/regression_20261031.log)、[TXT 日志](../../results/verification/txt_20261031.log)。这些结果文件属于本地产物，可重新生成。
 
-迁移完整性由[逐文件清单](migration_manifest.json)和统一检查入口核对：生产 RTL、活动 Verilog、硬件参考模型、SV testbench、TXT 数据、PDF、历史结果和压缩包保持原始内容；路径适配与文档更新单独登记。外部仓库少量 Git 缓存及 IDE 元数据变化另行记录，未执行暂存、检出或提交。
+迁移完整性由统一检查入口核对：生产 RTL、活动 Verilog、硬件参考模型、SV testbench、TXT 数据、PDF、历史结果和压缩包保持原始内容；路径适配与文档更新单独登记。外部仓库少量 Git 缓存及 IDE 元数据变化另行记录，未执行暂存、检出或提交。
 
 此记录仅证明目录迁移后的功能与运行路径，没有新增综合、PPA、真实 DesignWare 库或 Verilog 改写的完成证据。新生成的 `migration_check_` run 是迁移检查，不能替代缺失的历史正式实验数据。

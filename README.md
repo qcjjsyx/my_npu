@@ -29,8 +29,6 @@ Agent 开始工作前阅读[工作指令](AGENTS.md)。变更历史使用 Git �
 | `scripts/` | 项目检查和图稿工具 |
 | `archive/` | 原始压缩包、工程实践材料、历史交接、旧环境 |
 
-目录迁移的细节与原始资料缺口见[迁移说明](docs/project/migration.md)。
-
 ## 安装
 
 以下命令均在项目根目录运行。需要 Python 3.10 以上；本次验证使用 Python 3.13。RTL 仿真需要 `iverilog` 与 `vvp`。
