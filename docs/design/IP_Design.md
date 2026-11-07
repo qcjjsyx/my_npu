@@ -1,6 +1,8 @@
 # 多精度融合 MAC IP 电路架构设计
 
-本版已将 ALIGN、PSUM、MX 和 ACC RTL 迁移到 Q2.34/bias127，并以独立任意精度参考模型验证。当前接口和实现边界见§7.9、§8.8、§9.12；本轮运行证据见 hardware/verification/README.md，不构成综合或时序证据。
+> 适用范围：本文描述 2026-10-31 及以前的旧 SystemVerilog dot16 基线，包括 Q2.34 累加、FTZ/Inf 写回、MX 输入指数 1…254 边界、dot16 归约与 26-bit 输入容器。它是旧基线的设计合同，不是 2026-11-05 新架构的合同；新架构已确认约束与未冻结项见 [decisions.md](../project/decisions.md)。新 Verilog 实现不默认沿用本文的数值语义、接口或流水结构。
+
+旧基线版本已将 ALIGN、PSUM、MX 和 ACC RTL 迁移到 Q2.34/bias127，并以独立任意精度参考模型验证。其接口和实现边界见§7.9、§8.8、§9.12；本轮运行证据见 hardware/verification/README.md，不构成综合或时序证据。
 
 ## 1. 多精度融合方案
 

@@ -1,17 +1,20 @@
 # 动态可配置多精度融合 MAC
 
-本项目作为毕业设计推进，研究运行时可配置的多格式乘累加电路，以及计算资源复用、数值精度和硬件代价。主要计算块为 dot16；低精度模式可维护两组独立累加状态。
+本项目作为毕业设计推进，研究运行时可配置的多格式乘累加电路，以及计算资源复用、数值精度和硬件代价。面向 LLM 推理，优先考虑 MXFP8、MXFP4 的计算效率，开展设计与评估。
 
-当前已验证的 SystemVerilog 基线覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域。Verilog 改写并行推进，尚未完成。
+2026-11-05 起的新架构约束记录在[已确认约束](docs/project/decisions.md)：输入格式与乘法组合、计算边界与输入映射、吞吐与并行度基准，以及共享乘法资源方案。这些约束尚未实现或验证，其中仍有多项选择未冻结；本文和旧设计文档都不能作为新架构已经冻结的依据。
+
+现有 SystemVerilog 基线是旧 dot16/Q2.34 实现，覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域。它仅作为功能参考和验证证据，其 Q2.34、FTZ/Inf 与 MX 输入指数边界不迁移为新架构合同。`hardware/rtl/verilog/` 中的现有文件是旧基线的未完成改写，不是新架构实现。
 
 ## 从哪里开始
 
-1. 阅读[项目状态](docs/project/status.md)，了解已完成工作、证据及限制。
-2. 阅读[架构设计](docs/design/IP_Design.md)与[RTL 实现说明](docs/design/RTL_Design.md)。
-3. 查看[硬件验证说明](hardware/verification/README.md)、[数值实验指南](docs/experiments/README.md)。
-4. 查看[论文材料](thesis/README.md)；后续架构调整和任务安排由用户确定。
+1. 阅读[已确认约束](docs/project/decisions.md)，了解新架构已确认的需求和尚未冻结的选择。
+2. 阅读[项目状态](docs/project/status.md)，了解旧基线的已完成工作、证据及限制。
+3. 阅读[旧基线架构设计](docs/design/IP_Design.md)与[旧基线 RTL 实现说明](docs/design/RTL_Design.md)；两份文档描述 SystemVerilog 基线，不构成新架构合同。
+4. 查看[硬件验证说明](hardware/verification/README.md)、[数值实验指南](docs/experiments/README.md)，按其中的旧基线和模型语义使用证据。
+5. 查看[论文材料](thesis/README.md)；后续架构调整和任务安排由用户确定。
 
-Agent 开始工作前阅读[工作指令](AGENTS.md)。变更历史使用 Git 记录，不另行维护决策、变更或任务台账。
+Agent 开始工作前阅读[工作指令](AGENTS.md)。已确认决策写入[decisions.md](docs/project/decisions.md)，变更历史使用 Git 记录，不另建变更或任务台账。
 
 建议从 `NPU/` 根目录启动新会话，确保 agent 加载项目 `AGENTS.md`。文件中的工作指令不替代运行环境权限或自动验证。
 
@@ -64,6 +67,6 @@ python3 -m venv .venv
 
 ## 当前证据与限制
 
-2026-10-31 目录重组后的回归：硬件验证 134 项、实验框架 308 项，合计 **442 项通过**；完整 TXT 向量的连续输入、停顿和四类负例检查通过。具体记录见[项目状态](docs/project/status.md)。
+旧基线在 2026-10-31 目录重组后的回归：硬件验证 134 项、实验框架 308 项，合计 **442 项通过**；完整 TXT 向量的连续输入、停顿和四类负例检查通过。具体记录见[项目状态](docs/project/status.md)。
 
-目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与当前 Q2.34 硬件语义不同。有关设计结论必须结合各自的验证范围使用。
+旧基线目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与旧基线 Q2.34 硬件语义不同。新架构尚无 RTL 实现或验证证据；有关设计结论必须结合各自的验证范围使用。

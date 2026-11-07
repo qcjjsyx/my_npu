@@ -35,7 +35,7 @@
 ## 模型职责和口径
 
 - 实验包采用精确 dyadic 表示与明确舍入策略，分析对阶、累加、位匹配和 ULP 等指标；配置和 manifest 描述具体实验语义。
-- 硬件逐笔预言机独立位于 `hardware/verification/reference/`，采用当前 Q2.34/bias127 合同；它不依赖本实验包。实验中的 FP32 或早期 `hwacc-v1` 累加器不能替代这个模型。
+- 硬件逐笔预言机独立位于 `hardware/verification/reference/`，采用旧基线 Q2.34/bias127 合同（该合同不适用于 2026-11-05 新架构，见[已确认约束](../project/decisions.md)）；它不依赖本实验包。实验中的 FP32 或早期 `hwacc-v1` 累加器不能替代这个模型。
 - 主误差口径区分量化误差、对阶损失、累加损失；非有限样本按显式状态报告。未配置精度阈值时只报告结果，不自行认定某个位宽合格。
 - 对齐与累加的具体方法见[基础设计](design.md)、[MX 语义](mx_semantics.md)、[固定对阶](mx_alignment.md)、[位宽选择](mac_width_selection.md)和[历史验证记录](verification.md)。
 

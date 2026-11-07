@@ -1,14 +1,16 @@
-# MAC Q2.34 参考模型与验证
+# 旧基线 MAC Q2.34 参考模型与验证
 
-基线是当前 [IP_Design.md](../../docs/design/IP_Design.md)。第二阶段已迁移 ALIGN、PSUM、MX、ACC RTL 及配套 testbench。独立 Python 数值模型保持不变，所有阶段与完整链路对照该模型；原旧格式 skip/xfail 已移除。
+> 适用范围：本文记录旧 SystemVerilog dot16/Q2.34 基线。文中的 Q2.34 累加、FTZ/Inf 写回、MX 输入指数 1…254 边界及 dot16 事务语义只适用于该基线，不是 2026-11-05 新架构的数值合同；新架构已确认范围与未冻结项见[已确认约束](../../docs/project/decisions.md)。
+
+旧基线设计见 [IP_Design.md](../../docs/design/IP_Design.md)。第二阶段已迁移 ALIGN、PSUM、MX、ACC RTL 及配套 testbench。独立 Python 数值模型保持不变，所有阶段与完整链路对照该模型；原旧格式 skip/xfail 已移除。
 
 ## 目录重组后运行（2026-10-31）
 
 从项目根目录执行 `.venv/bin/python -m pytest -q hardware/verification/tests`；根 `pyproject.toml` 已配置参考模型和工具的导入路径。Python 测试位于 `tests/`，SV testbench 与 DesignWare 仿真替身位于 `tb/`，运行工具位于 `tools/`。
 
-此次新环境回归中硬件 134 项通过，连同实验框架 308 项共 442 项通过。现有完整 TXT 向量连续和停顿测试、四类负例均通过。下文 2026-10-07/09 的记录为原始历史记录，数值合同继续适用。SystemVerilog、参考模型、testbench 和原始向量文件内容保持一致。
+此次新环境回归中硬件 134 项通过，连同实验框架 308 项共 442 项通过。现有完整 TXT 向量连续和停顿测试、四类负例均通过。下文 2026-10-07/09 的记录为原始历史记录，所述数值合同只对旧基线继续适用。SystemVerilog、参考模型、testbench 和原始向量文件内容保持一致。
 
-## 当前数值合同
+## 旧基线数值合同（Q2.34）
 
 `reference/mac_contract.py` 使用精确整数和 `Fraction`，不用 Python float，不复用 `experiments/` 的 FP32 实验累加器，不模拟时钟。入口分类→M→逐项 ALIGN RNE→精确 PSUM→MX 精确重定标→保留对阶 tail 的 ACC 最终一次 RNE。
 
@@ -24,9 +26,9 @@ FP19 新量化精度的范围、重定标和误差证明见设计文档§6.1.1�
 
 `FloatAcc36State(sig, exp, infinity_sign=0)` 使用 signed36 Q2.34。`trace_float_acc36_update()` 返回两路 signed36 floor 对阶操作数、signed37 完整整数和、两路精确非负 tail 及最终状态。tail 参与相加后的最终 RNE；深抵消时不丢弃余数。RTL 在 ACC 内先精确规格化系数，再采用3个低位工作位及 shift-right-jam，signed39→signed40 相加后一次 RNE；范围证明见设计文档§9.6.1。参考模型不复用硬件算法。
 
-用户已确认的写回策略：正常 E=1…254；下溢 FTZ 为规范零 M=0/E=0；上溢保留有符号 Inf（E=255）；旧 Inf 加合法有限贡献保持，first 可清除。模型用 `infinity_sign=±1` 保存 Inf 符号，sig=0 仅为占位，不能代入有限公式。RTL 输出独立 signed2 `o_acc_float_inf_sign`（0、+1、−1），Inf 时系数为0、E=255。有限数仍完整保留36位系数。
+旧基线用户已确认的写回策略：正常 E=1…254；下溢 FTZ 为规范零 M=0/E=0；上溢保留有符号 Inf（E=255）；旧 Inf 加合法有限贡献保持，first 可清除。模型用 `infinity_sign=±1` 保存 Inf 符号，sig=0 仅为占位，不能代入有限公式。RTL 输出独立 signed2 `o_acc_float_inf_sign`（0、+1、−1），Inf 时系数为0、E=255。有限数仍完整保留36位系数。
 
-**暂缓项：**按用户要求不处理非零 MX 输入公式 E 越界。`Mx.exp` 保留完整数学 E，不截成8位；ACC 遇到非零输入 E 不在1…254时报 `UnfrozenContract`，不自行重定标、回绕或生成 Inf/FTZ。零贡献忽略占位 E。此诊断与已定义的 ACC 写回 FTZ/Inf 是不同边界。
+**旧基线暂缓项：**按用户要求不处理非零 MX 输入公式 E 越界。`Mx.exp` 保留完整数学 E，不截成8位；ACC 遇到非零输入 E 不在1…254时报 `UnfrozenContract`，不自行重定标、回绕或生成 Inf/FTZ。零贡献忽略占位 E。此诊断与已定义的 ACC 写回 FTZ/Inf 是不同边界。
 
 旧27位 ACC 模型已移除。旧 signed37 + signed12 lsb_exp 的 `update_float_acc36_candidate()` 接口明确报退役，不能静默把旧参数当 biased E；新接口为 `update_float_acc36()`。
 
