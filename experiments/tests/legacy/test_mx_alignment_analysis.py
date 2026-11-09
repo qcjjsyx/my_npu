@@ -709,7 +709,7 @@ def test_analyzer_source_digest_and_engine_isolation(tmp_path):
     )
     result = subprocess.run(
         [sys.executable, "-c", code],
-        cwd=str(Path(__file__).resolve().parent.parent),
+        cwd=str(Path(__file__).resolve().parents[2]),
         capture_output=True,
         text=True,
         check=True,

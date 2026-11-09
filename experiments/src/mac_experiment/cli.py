@@ -22,6 +22,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    local_p = sub.add_parser("local-align-run", help="explore folded-product local alignment only")
+    local_p.add_argument("--config", required=True)
+    local_p.add_argument("--quiet", action="store_true")
+
+    local_replay = sub.add_parser("local-align-replay", help="replay a saved local alignment representative")
+    local_replay.add_argument("--run", required=True)
+    local_replay.add_argument("--index", type=int, default=0)
+    local_replay.add_argument("--out")
+
     run_p = sub.add_parser("run", help="execute a configured sweep (width_sweep or block_sweep)")
     run_p.add_argument("--config", required=True, help="path to a YAML run config")
     run_p.add_argument("--quiet", action="store_true", help="suppress progress output")
@@ -340,6 +349,24 @@ def _cmd_mx_align_trace(args) -> int:
     return 0
 
 
+def _cmd_local_align_run(args) -> int:
+    from .local_alignment.runner import run_from_file
+
+    print(run_from_file(args.config, verbose=not args.quiet))
+    return 0
+
+
+def _cmd_local_align_replay(args) -> int:
+    from .local_alignment.runner import replay, write_json
+
+    result = replay(args.run, args.index)
+    if args.out:
+        write_json(args.out, result)
+    else:
+        print(json.dumps(result, indent=2, allow_nan=False))
+    return 0
+
+
 def _cmd_width_run(args) -> int:
     from .widthselect.runner import run_from_file
 
@@ -448,6 +475,8 @@ def main(argv: list[str] | None = None) -> int:
         "mx-analyze": _cmd_mx_analyze,
         "mx-align-analyze": _cmd_mx_align_analyze,
         "mx-align-trace": _cmd_mx_align_trace,
+        "local-align-run": _cmd_local_align_run,
+        "local-align-replay": _cmd_local_align_replay,
         "width-run": _cmd_width_run,
         "width-analyze": _cmd_width_analyze,
         "width-replay": _cmd_width_replay,

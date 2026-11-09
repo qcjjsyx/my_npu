@@ -29,7 +29,7 @@ TF32：1 符号位、8 指数位（bias 127）、10 尾数位；正常有效数�
 `Cmax` 为当前 block 非零乘积的最大 C；全部为零时走显式零路径（`window_lsb=None`）。
 16 项对齐后使用 W+7 位有符号容器（`reduction.container_bounds`），越界抛
 `WindowOverflowError` 并标记该单元格，不 wrap、不饱和。范围证明与测试见
-`tests/test_reducer.py::test_window_container_range_proof`。
+`tests/legacy/test_reducer.py::test_window_container_range_proof`。
 
 ### 1.3 单次 FP32 更新
 
@@ -150,7 +150,7 @@ src/mac_experiment/
   cli.py        run / analyze / enhance / plot / distributions / version
 ```
 
-W driver 与 B driver 共用同一 `SampleEngine`；`tests/test_decomposition.py`
+W driver 与 B driver 共用同一 `SampleEngine`；`tests/legacy/test_decomposition.py`
 断言同一 (W,B) 在两种 driver 下记录逐字段一致。
 
 `results/enhance.py` 提供离线增强入口：只读逐样本记录（流式），用与首次汇总相同的

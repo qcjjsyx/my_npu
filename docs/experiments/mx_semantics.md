@@ -43,7 +43,7 @@ E4M3 **没有 Inf**：编码只能饱和到对应符号的最大有限值 448，
 与现有 `formats/fp8_e4m3.py`（`Fp8E4M3`）的区别：旧适配器是 dot-product 实验的
 **输入适配器**，对 `raw_exp == 0` 做 FTZ（一律当零）。MX 元素编解码器
 `formats/e4m3_element.py` 显式支持次正规数与符号零（无 FTZ），两者语义不同、互不替代。
-测试 `tests/test_mx_formats.py` 覆盖全部 254 个有限码的编解码往返。
+测试 `tests/legacy/test_mx_formats.py` 覆盖全部 254 个有限码的编解码往返。
 
 ### 1.2 E8M0 scale 语义（OCP）
 
@@ -92,7 +92,7 @@ scale 通过精确的 dyadic 指数平移应用：`x · 2^e = Dyadic(x.m, x.e + 
 - FP32 路径：`r_0 = 0`，`r_{b+1} = RN32(r_b + s_b)`，最终 `R[m,n] = r_B`。
   每次更新只做一次 RNE，保留 FP32 次正规数（渐进下溢），部分和不预先转 FP32。
 - 一个 32 元素输入 scale 组恰好包含两个 dot16：两者共享组 scale，但**分别**更新 FP32，
-  不合并成一次 dot32 累加。`tests/test_mx_engine.py` 给出 E4M3 级反例区分两种实现。
+  不合并成一次 dot32 累加。`tests/legacy/test_mx_engine.py` 给出 E4M3 级反例区分两种实现。
 - **无有限 W 窗口损失**：本实验不使用旧 reducer 的窗口模型。
 
 结论口径：本实验测量**给定 FP32 数据分布经 MXFP8 输入量化后**，这些 MX 输入在

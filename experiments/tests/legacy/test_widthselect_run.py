@@ -196,7 +196,7 @@ def test_run_is_deterministic_across_run_ids(tmp_path):
 
 
 def test_config_loader_defaults_and_rejections(tmp_path):
-    smoke = Path(__file__).resolve().parent.parent / "configs" / "widthselect_smoke.yaml"
+    smoke = Path(__file__).resolve().parents[2] / "configs" / "legacy" / "widthselect_smoke.yaml"
     config = load_widthselect_config(smoke)
     assert config.mode == "widthselect_align"
     assert config.formats == ["mx_fp8", "tf32"]
@@ -259,7 +259,7 @@ def test_config_loader_defaults_and_rejections(tmp_path):
 
 
 def test_formal_templates_load():
-    configs_dir = Path(__file__).resolve().parent.parent / "configs"
+    configs_dir = Path(__file__).resolve().parents[2] / "configs" / "legacy"
     align = load_widthselect_config(configs_dir / "widthselect_align_formal_template.yaml")
     assert align.mode == "widthselect_align"
     assert align.W_align_list and all(1 <= value <= 60 for value in align.W_align_list)

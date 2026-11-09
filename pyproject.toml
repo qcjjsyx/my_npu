@@ -22,4 +22,4 @@ include = ["mac_experiment*"]
 
 [tool.pytest.ini_options]
 testpaths = ["hardware/verification/tests", "experiments/tests"]
-pythonpath = ["experiments/src", "experiments/tests", "hardware/verification", "hardware/verification/tools"]
+pythonpath = ["experiments/src", "experiments/tests/legacy", "hardware/verification", "hardware/verification/tools"]

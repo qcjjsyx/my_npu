@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "run_widthselect_all.py"
 
 _spec = importlib.util.spec_from_file_location("run_widthselect_all", SCRIPT)

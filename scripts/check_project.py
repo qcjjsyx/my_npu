@@ -114,7 +114,7 @@ def check_smoke(log_dir: Path, stamp: str) -> dict:
     )
     outputs = []
     for filename, run_command, analyze_command, family in configs:
-        config = yaml.safe_load((ROOT / "experiments/configs" / filename).read_text())
+        config = yaml.safe_load((ROOT / "experiments/configs/legacy" / filename).read_text())
         config["run_name"] = f"migration_check_{stamp}"
         if family == "dot_product":
             config.update(samples_per_seed=1, formats=["fp8_e4m3"],

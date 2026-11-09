@@ -1,0 +1,8 @@
+seeds: [7]
+sequences: 1
+lengths: [32]
+formats: [mxfp8_e4m3fn, mxfp8_e5m2, mxfp8_e4m3fn_e5m2, mxfp8_e5m2_e4m3fn, fp16, bf16]
+F: [0, 4]
+rounding: [floor, rne]
+distributions: [gaussian, laplace, student_t3, outlier, uniform, positive]
+output_root: results/numerical/local_alignment/runs

@@ -59,7 +59,10 @@ python3 -m venv .venv
 # 运行已交付的 TXT 向量
 .venv/bin/python hardware/verification/tools/run_txt_vectors.py --build results/verification/txt
 
-# 三组小规模位宽实验及分析
+# 新架构局部对阶探索（无配对/状态舍入）
+.venv/bin/python -m mac_experiment local-align-run --config experiments/configs/local_alignment/smoke.yaml --quiet
+
+# 旧三组小规模位宽实验及分析
 .venv/bin/python experiments/scripts/run_widthselect_all.py --plain --plots
 ```
 

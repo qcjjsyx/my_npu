@@ -379,7 +379,7 @@ C_{b+1} = HWAdd_{W_acc}(C_b, q_b(W_align))
 
 ## 8. 测试与交付
 
-重点测试（见 `tests/test_widthselect_*.py`）：
+重点测试（见 `tests/legacy/test_widthselect_*.py`）：
 
 - 新随机流：复现、pair 区分、前缀稳定、扩展 pair 数/坐标不改变已有输入；与历史
   MX 流不重合（不同命名空间抽样若干坐标即可）；

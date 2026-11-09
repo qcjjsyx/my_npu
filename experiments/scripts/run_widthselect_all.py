@@ -20,9 +20,9 @@ Examples:
     .venv/bin/python experiments/scripts/run_widthselect_all.py --preset formal
     .venv/bin/python experiments/scripts/run_widthselect_all.py --skip-analysis
     .venv/bin/python experiments/scripts/run_widthselect_all.py \
-        --align-config experiments/configs/widthselect_smoke.yaml \
-        --acc-config experiments/configs/widthselect_acc_smoke.yaml \
-        --joint-config experiments/configs/widthselect_joint_smoke.yaml
+        --align-config experiments/configs/legacy/widthselect_smoke.yaml \
+        --acc-config experiments/configs/legacy/widthselect_acc_smoke.yaml \
+        --joint-config experiments/configs/legacy/widthselect_joint_smoke.yaml
 """
 
 from __future__ import annotations
@@ -44,14 +44,14 @@ EXPERIMENTS = ("align", "acc", "joint")
 
 PRESETS = {
     "smoke": {
-        "align": "experiments/configs/widthselect_smoke.yaml",
-        "acc": "experiments/configs/widthselect_acc_smoke.yaml",
-        "joint": "experiments/configs/widthselect_joint_smoke.yaml",
+        "align": "experiments/configs/legacy/widthselect_smoke.yaml",
+        "acc": "experiments/configs/legacy/widthselect_acc_smoke.yaml",
+        "joint": "experiments/configs/legacy/widthselect_joint_smoke.yaml",
     },
     "formal": {
-        "align": "experiments/configs/widthselect_align_formal_template.yaml",
-        "acc": "experiments/configs/widthselect_acc_formal_template.yaml",
-        "joint": "experiments/configs/widthselect_joint_formal_template.yaml",
+        "align": "experiments/configs/legacy/widthselect_align_formal_template.yaml",
+        "acc": "experiments/configs/legacy/widthselect_acc_formal_template.yaml",
+        "joint": "experiments/configs/legacy/widthselect_joint_formal_template.yaml",
     },
 }
 
