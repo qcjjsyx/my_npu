@@ -16,17 +16,17 @@ import yaml
 
 from ..arithmetic.dyadic import Dyadic
 from ..widthselect.distributions import WIDTH_DISTRIBUTIONS, distribution_metadata, sample_fp32_matrix
-from .model import LAYOUTS, PAIRS, align, decode, family, output_fp32
+from .model import LAYOUTS, PAIRS, align, decode, family, output_fp32, postfold_product
 from .quantize import quantize
 
-VERSION = "local-alignment-v1"
+VERSION = "local-alignment-v2"
 DEFAULT_F = [0, 1, 2, 3, 4, 6, 8, 12, 16]
 DEFAULT_LENGTHS = [32, 128, 512, 2048, 8192, 16384]
 
 
 def load_config(path):
     config = yaml.safe_load(Path(path).read_text())
-    defaults = dict(seeds=[1], sequences=1, lengths=DEFAULT_LENGTHS, formats=list(PAIRS),
+    defaults = dict(seeds=[1], sequences=1, lengths=DEFAULT_LENGTHS, formats=[mode for mode in PAIRS if mode != "bf16_postfold"],
                     F=DEFAULT_F, rounding=["floor", "rne"], distributions=list(WIDTH_DISTRIBUTIONS),
                     output_root="results/numerical/local_alignment/runs")
     if not isinstance(config, dict) or set(config) - set(defaults):
@@ -133,7 +133,8 @@ def blocks(a, b, mode, length):
         for i in range(start, min(start + K, length)):
             ma, qa = decode(a.codes[i], af)
             mb, qb = decode(b.codes[i], bf)
-            products.append((ma * mb, qa + qb))
+            product = (ma * mb, qa + qb)
+            products.append(postfold_product(*product) if mode == "bf16_postfold" else product)
         products.extend([(0, 0)] * (K - len(products)))
         h = a.scales[start // 32] + b.scales[start // 32] - 254 if layout == "fp8" else 0
         yield products, h
@@ -157,6 +158,20 @@ def evaluate(a, b, mode, length, F, rounding, local=None):
                                             for k, v in asdict(result).items()})
             # asdict recursively converts Dyadic; preserve canonical integer-as-string serialization.
             trace.update(q=result.q.to_dict(), s=result.s.to_dict(), l1=result.l1.to_dict())
+            C = LAYOUTS[family(mode)][0]
+            trace.update(multiplication_product_width=18 if mode == "bf16_postfold" else C,
+                         alignment_coefficient_width=C)
+            if mode == "bf16_postfold":
+                trace["recoding"] = "P'=P<<r, r=T%4, Q=T//4; terms P/T are P'/Q"
+                start = index * LAYOUTS[family(mode)][3]
+                for offset, term in enumerate(trace["terms"]):
+                    i = start + offset
+                    if i < length:
+                        ma, ea = decode(a.codes[i], "bf16")
+                        mb, eb = decode(b.codes[i], "bf16")
+                        term.update(original_P=ma*mb, original_T=ea+eb, fold_r=(ea+eb)%4)
+                    else:
+                        term.update(original_P=0, original_T=0, fold_r=0)
     ref, ref_sat = output_fp32(S)
     out, out_sat = output_fp32(T)
     return dict(S=S, T=T, L1=L1, local=local, changed=changed, zeroed=zeroed,
@@ -228,7 +243,8 @@ def run_from_file(path, verbose=True):
         dist, mode, length, F, rounding = key
         C, g, b, K = LAYOUTS[family(mode)]
         row = dict(distribution=dist, mode=mode, length=length, F=F, rounding=rounding,
-                   product_width=C, window_width=C+F, sum_width=C+F+(K-1).bit_length(), K=K,
+                   product_width=18 if mode == "bf16_postfold" else C,
+                   coefficient_width=C, window_width=C+F, sum_width=C+F+(K-1).bit_length(), K=K,
                    **bucket["counts"])
         for label in ("local", "dot", "fp_error"):
             row.update({f"{label}_{k}": v for k, v in bucket[label].summary().items()})
@@ -259,6 +275,7 @@ def run_from_file(path, verbose=True):
                config_sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
                distributions={d: distribution_metadata(d) for d in config["distributions"]},
                quantiles="exact nearest-rank p50/p99 from Dyadic/Fraction frequency tables; memory proportional to distinct observations; numeric reporting uses binary64",
+               postfold="bf16_postfold: signed18 P=mA*mB, T=EA+EB -> signed21 P'=P<<(T%4), Q=T//4; alignment g=4,b=268; original bf16 unchanged",
                contract="exact product -> local floor/RNE -> exact dyadic accumulation -> final FP32 RNE finite saturation; no pair/state rounding",
                quantization="FP32 shared sources; per-side 32-element smallest covering power-of-two E8M0 scale; target RNE, subnormal kept, overflow saturates",
                representative_policy="maximum absolute T-S, first on tie; source_id joins sources.jsonl.gz; replay with evaluate",

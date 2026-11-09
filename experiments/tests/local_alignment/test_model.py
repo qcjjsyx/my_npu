@@ -135,7 +135,7 @@ def test_scale_exchange_and_exact_full_precision(mode):
         ref+=oracle_value(ac,af)*oracle_value(bc,bf)*power(h)
     assert result['S'].to_fraction()==ref
     assert result['T']==result['S']
-    swapped=next(m for m,pair in PAIRS.items() if pair==(bf,af))
+    swapped=mode if af == bf else next(m for m,pair in PAIRS.items() if pair==(bf,af))
     assert evaluate(qb,qa,swapped,45,1024,'rne')['T']==result['T']
 
 

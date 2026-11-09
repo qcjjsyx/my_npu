@@ -11,14 +11,17 @@ FORMATS = {
     "fp16": (5, 10, 15, 0x7bff),
     "bf16": (8, 7, 127, 0x7f7f),
 }
-# signed full-product container C, exponent granularity g, product bias b, K
-LAYOUTS = {"fp8": (16, 4, 36, 16), "fp16": (30, 4, 50, 8), "bf16": (18, 1, 268, 16)}
+# signed alignment-coefficient container C, exponent granularity g, product bias b, K
+# bf16_postfold uses an 18-bit complete product, then exact 21-bit recoding.
+LAYOUTS = {"fp8": (16, 4, 36, 16), "fp16": (30, 4, 50, 8), "bf16": (18, 1, 268, 16),
+           "bf16_postfold": (21, 4, 268, 16)}
 PAIRS = {
     "mxfp8_e4m3fn": ("e4m3fn", "e4m3fn"),
     "mxfp8_e5m2": ("e5m2", "e5m2"),
     "mxfp8_e4m3fn_e5m2": ("e4m3fn", "e5m2"),
     "mxfp8_e5m2_e4m3fn": ("e5m2", "e4m3fn"),
     "fp16": ("fp16", "fp16"), "bf16": ("bf16", "bf16"),
+    "bf16_postfold": ("bf16", "bf16"),
 }
 
 
@@ -72,6 +75,16 @@ def element_value(code, fmt):
 def check_signed(n, width):
     if not -(1 << (width - 1)) <= n < 1 << (width - 1):
         raise ArithmeticError(f"{n} overflows signed{width}")
+
+
+def postfold_product(p, t):
+    """Exact BF16 post-multiply recoding P'=P*2**(T mod 4), Q=T//4."""
+    check_signed(p, 18)
+    if not p:
+        return 0, 0
+    coefficient = p << (t % 4)
+    check_signed(coefficient, 21)
+    return coefficient, t // 4
 
 
 @dataclass

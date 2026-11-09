@@ -1,0 +1,10 @@
+# BF16 post-multiply exponent folding, 32-bit alignment coefficient window.
+# Formal workload; not run by project checks.
+seeds: [1, 2, 3]
+sequences: 64
+lengths: [32, 128, 512, 2048, 8192, 16384]
+formats: [bf16_postfold]
+F: [11]
+rounding: [floor]
+distributions: [gaussian, laplace, student_t3, outlier, uniform, positive]
+output_root: results/numerical/local_alignment/runs

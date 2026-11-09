@@ -60,7 +60,7 @@ def test_cli_outputs_replay_no_overwrite_and_shared_source(tmp_path):
     assert len(sources)==2
     assert len(sources[0]['targets']['e4m3fn'][0]['codes'])==64
     metadata=json.loads((run/'metadata.json').read_text())
-    assert metadata['version']=='local-alignment-v1'
+    assert metadata['version']=='local-alignment-v2'
     first=replay(run,0)
     with gzip.open(run/'samples.jsonl.gz','rt') as handle:
         saved=next(x for x in map(json.loads,handle) if all(x[k]==first[k] for k in ('source_id','mode','length','F','rounding')))
