@@ -40,12 +40,15 @@ def load_config(path):
             raise ValueError(f"{key} must contain integers")
     if type(config["sequences"]) is not int or config["sequences"] < 1:
         raise ValueError("sequences must be a positive integer")
-    if any(x < 32 or x > 16384 or x % 32 for x in config["lengths"]) or any(x < 0 for x in config["F"]):
-        raise ValueError("lengths must be multiples of 32 in [32,16384]; F must be >=0")
-    if set(config["formats"]) - PAIRS.keys() or set(config["rounding"]) - {"floor", "rne"}:
-        raise ValueError("unsupported format/rounding")
-    if set(config["distributions"]) - set(WIDTH_DISTRIBUTIONS):
-        raise ValueError("unsupported distribution")
+    if any(x < 1 or x > 16384 for x in config["lengths"]):
+        raise ValueError("lengths must be integers in [1,16384]")
+    if any(x < 0 for x in config["F"]):
+        raise ValueError("F must contain nonnegative integers")
+    for key, supported in (("formats", PAIRS), ("rounding", {"floor", "rne"}),
+                           ("distributions", WIDTH_DISTRIBUTIONS)):
+        unknown = set(config[key]) - set(supported)
+        if unknown:
+            raise ValueError(f"unsupported {key}: {sorted(unknown)}")
     if not isinstance(config["output_root"], str) or not config["output_root"]:
         raise ValueError("output_root must be a nonempty path")
     return config

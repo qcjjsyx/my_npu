@@ -1,6 +1,6 @@
 # 数值实验指南
 
-实验包位于 `experiments/src/mac_experiment/`；安装和执行都在项目根目录完成，见[根 README](../../README.md)。旧实验保留在 `experiments/tests/legacy/`，新局部对阶实验测试在 `experiments/tests/local_alignment/`。
+实验包位于 `experiments/src/mac_experiment/`；安装和执行都在项目根目录完成，见[根 README](../../README.md)。旧实验保留在 `experiments/tests/legacy/`，新局部对阶实验测试在 `experiments/tests/local_alignment/`，累加精度实验测试在 `experiments/tests/accumulation_precision/`。
 
 ## 实验族与默认输出
 
@@ -10,6 +10,7 @@
 | mxfp8 | `mx_smoke.yaml`、`mx_pilot.yaml`；MXFP8 矩阵计算 | `results/numerical/mxfp8/runs/` | 同级 `analysis/` |
 | mx_alignment | `mx_align_smoke.yaml`；固定对阶窗口实验 | `results/numerical/mx_alignment/runs/` | 同级 `analysis/` |
 | local_alignment | `local_alignment/smoke.yaml`、`formal_template.yaml`；折叠系数完整乘积的局部 floor/RNE 探索 | `results/numerical/local_alignment/runs/` | 每个 run 内 JSON/CSV |
+| accumulation_precision | `accumulation_precision/smoke.yaml`、`formal_template.yaml`；固定局部路径，扫描可配置 p_acc>=40 | `results/numerical/accumulation_precision/runs/` | 每个 run 内 JSON/CSV |
 | widthselect | `widthselect_*`；对阶、累加及联合位宽扫描 | `results/numerical/widthselect/runs/` | 同级 `analysis/` |
 
 旧 YAML 在 `experiments/configs/legacy/` 下，新实验配置在 `experiments/configs/local_alignment/` 下。`output_root` 可显式指定，离线分析支持 `--out`；相对路径按当前工作目录解释，因此以下命令从项目根目录运行。
@@ -50,7 +51,7 @@
 .venv/bin/python -m pytest -q experiments/tests/local_alignment
 ```
 
-`formal_template.yaml` 提供完整候选模板，默认检查不会运行它。可改 `seeds`、`sequences`、`lengths`、`formats`、`F`、`rounding`、`distributions`、`output_root`。长度限制为 32 的倍数且不超过 16384；F 候选默认 `[0,1,2,3,4,6,8,12,16]`，长度默认 `[32,128,512,2048,8192,16384]`。完整模板组合较多，运行时间和精确分位数频次表内存随工作量及不同误差值数量增长，正式运行前需按实际资源调整序列数；本次仅执行 smoke。
+`formal_template.yaml` 提供完整候选模板，默认检查不会运行它。可改 `seeds`、`sequences`、`lengths`、`formats`、`F`、`rounding`、`distributions`、`output_root`。长度支持 1～16384 的任意整数，最后一份局部贡献不足 K 项时补零；MX 前缀仍使用同一最大长度编码源的块 scale，不针对短前缀重新量化。F 支持任意非负整数，候选默认 `[0,1,2,3,4,6,8,12,16]`，长度默认 `[32,128,512,2048,8192,16384]`。完整模板组合较多，运行时间和精确分位数频次表内存随工作量及不同误差值数量增长，正式运行前需按实际资源调整序列数；本次仅执行 smoke。
 
 原六种模式为 `mxfp8_e4m3fn`、`mxfp8_e5m2`、`mxfp8_e4m3fn_e5m2`、`mxfp8_e5m2_e4m3fn`、`fp16`、`bf16`；另有显式选择的 `bf16_postfold` 乘后折叠探索，默认模式列表仍为原六种。FP8 只测 MX。每种分布、seed、序列先生成同一份有限 FP32 A/B，所有格式从这批源量化；同一序列的多个长度使用同一最大长度源的前缀。复用旧六种固定分布定义及采样器；`uniform` 是有限 FP32 编码均匀抽样，`positive` 是正有限非零 FP32 编码均匀抽样，均不等同于实数区间均匀分布。
 
@@ -70,7 +71,7 @@ FP16/BF16 使用逐元素 RNE，保留 subnormal，量化溢出饱和。MX 对 A
 - `config.json`、`metadata.json`：解析后的配置、seed、算法版本、代码哈希、Git HEAD/工作区状态、采样分布定义和统计口径。
 - `sources.jsonl.gz`：原始 FP32 位模式、各目标量化编码、两侧 scale 和量化事件，`source_id` 可关联所有候选。
 - `samples.jsonl.gz`：逐序列/长度/候选的精确 S、T、L1，最终 FP32 位模式、饱和标志和 ULP。
-- `summary.json`、`summary.csv`：逐分布、模式、长度、F、舍入方式独立统计。逐项 changed/zeroed 的 rate 分母是非零乘积；局部及长点积 T-S 包含 exact-match、绝对误差均值/最大值/p50/p99、有符号均值、误差正负计数与比例、绝对误差/L1 均值/最大值/p50/p99。L1 为零单列，不进入归一化分母。分位数按完整样本的最近秩法精确计算，数值展示转换为 binary64。
+- `summary.json`、`summary.csv`：逐分布、模式、长度、F、舍入方式独立统计。`length` 是实际乘积项数，`total` 是按 K 补零后的归约位置总数；逐项 changed/zeroed 的 rate 分母是非零乘积；局部及长点积 T-S 包含 exact-match、绝对误差均值/最大值/p50/p99、有符号均值、误差正负计数与比例、绝对误差/L1 均值/最大值/p50/p99。L1 为零单列，不进入归一化分母。分位数按完整样本的最近秩法精确计算，数值展示转换为 binary64。
 - `representatives.json`：每桶最大绝对 T-S 的代表序列（相同误差取首个）及第一个 changed 局部块的逐项 P/T/shift/n trace；全程无 changed 时保留最后块。`local-align-replay` 从保存编码重算，不重新采样。
 
 最终 S 和 T 分别仅做一次 FP32 RNE、有限值饱和、渐进下溢；精确零输出 +0，非零微小负值舍入为零时保留 -0。最终指标包含 bitmatch、ULP、输出绝对误差、有符号零不匹配。饱和样本的匹配单列，另给排除任一侧饱和后的 bitmatch 计数/分母/rate，避免共同饱和造成虚假精度结论；精确 T-S 始终保留。无验收阈值，不自动判定某个候选合格。
@@ -86,6 +87,10 @@ FP16/BF16 使用逐元素 RNE，保留 subnormal，量化溢出饱和。MX 对 A
 比较相同32位对阶窗口时，原 BF16 为 `C=18,F=14`，乘后折叠为 `C=21,F=11`，两者局部和均为 signed36。令原非零乘积的最大指数为 `Tmax`，原绝对 LSB 为 `Tmax-282`，新绝对 LSB 为 `4floor(Tmax/4)-279`；两者相差 `3-(Tmax mod 4)` 位。因此重编码本身精确，但同为32位容器时，新模式可能少保留0至3位；`Tmax mod 4=3` 时两者对阶网格相同，逐项结果相同。其他余数下，当各项恰好落在新网格时仍相同，不能仅凭窗口总宽相同推断精度相同。
 
 summary 分别记录 `product_width=18`、`coefficient_width=21`、`window_width=32`、`sum_width=36`。代表 trace 以 P/T 字段保存重编码后的 P'/Q，额外保留 `original_P`、`original_T`、`fold_r`、`multiplication_product_width` 与 `alignment_coefficient_width`，可检查每项精确保值关系；CLI 运行和重放方式沿用上一节。metadata 版本为 `local-alignment-v2`，并保存整个实验包的源码哈希。
+
+## 新累加精度实验
+
+[交错累加状态精度实验方案](accumulation_precision.md)规定 p_acc>=40 的逐份加后 RNE 比较（当前正式模板40/42/44/46/48）、覆盖范围、数据和审查方式；正式实验由用户运行。该模型不继承旧 widthselect 的操作数预舍入语义。
 
 ## 已保留和缺失的数据
 

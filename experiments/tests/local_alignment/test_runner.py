@@ -13,7 +13,7 @@ from mac_experiment.local_alignment.runner import Errors, load_config, replay, r
 
 def test_config_validation(tmp_path):
     path=tmp_path/'config.yaml'
-    for payload in ({'unknown':1},{'lengths':[31]},{'F':[-1]},{'rounding':['truncate']},
+    for payload in ({'unknown':1},{'lengths':[0]},{'lengths':[16385]},{'F':[-1]},{'rounding':['truncate']},
                     {'formats':['fp8']},{'sequences':0},{'seeds':[True]},{'lengths':[32,32]}):
         path.write_text(yaml.safe_dump(payload))
         with pytest.raises(ValueError):
@@ -107,3 +107,46 @@ def test_saturation_cannot_mask_internal_loss_and_saved_reference(tmp_path,monke
     assert row['local_absolute_mean']==8
     assert row['local_absolute_p50']==8
     assert row['dot_signed_mean']==-16
+
+
+def test_custom_windows_and_partial_lengths(tmp_path):
+    from mac_experiment.local_alignment.model import PAIRS
+    config=dict(seeds=[3],sequences=1,lengths=[1,17,31,33],F=[3,18],
+                rounding=['floor','rne'],distributions=['gaussian'],
+                formats=list(PAIRS),output_root=str(tmp_path/'runs'))
+    path=tmp_path/'custom.yaml'
+    path.write_text(yaml.safe_dump(config))
+    assert load_config(path)['F']==[3,18]
+    run=run_from_file(path,False)
+    rows=json.loads((run/'summary.json').read_text())
+    assert len(rows)==len(PAIRS)*4*2*2
+    for row in rows:
+        assert row['local_count']==(row['length']+row['K']-1)//row['K']
+    # Replay every partial-length case, including BF16 postfold trace padding.
+    reps=json.loads((run/'representatives.json').read_text())
+    for i in range(len(reps)):
+        result=replay(run,i)
+        assert result['trace']==reps[i]['trace']
+
+
+def test_partial_mx_scale_uses_full_source_block(tmp_path, monkeypatch):
+    from fractions import Fraction
+    from mac_experiment.arithmetic.fp32 import Fp32
+    from mac_experiment.local_alignment.model import element_value
+    import mac_experiment.local_alignment.runner as runner
+    # A prefix shares the scale selected for the full source block, even when
+    # its largest value lies beyond the requested prefix.
+    bits=[Fp32.from_float(1).bits]*16+[Fp32.from_float(128).bits]
+    monkeypatch.setattr(runner,'sample_fp32_matrix',lambda *args: bits)
+    path=tmp_path/'prefix.yaml'
+    path.write_text(yaml.safe_dump(dict(lengths=[1,17],F=[18],rounding=['floor'],
+        formats=['mxfp8_e4m3fn'],distributions=['gaussian'],output_root=str(tmp_path/'runs'))))
+    run=run_from_file(path,False)
+    with gzip.open(run/'sources.jsonl.gz','rt') as f: source=json.loads(next(f))
+    a,b=source['targets']['e4m3fn']
+    with gzip.open(run/'samples.jsonl.gz','rt') as f: samples=list(map(json.loads,f))
+    for sample in samples:
+        expected=Fraction(0)
+        for i in range(sample['length']):
+            expected+=element_value(a['codes'][i],'e4m3fn').to_fraction()*element_value(b['codes'][i],'e4m3fn').to_fraction()*Fraction(2)**(a['scales'][i//32]+b['scales'][i//32]-254)
+        assert Dyadic.from_dict(sample['S']).to_fraction()==expected

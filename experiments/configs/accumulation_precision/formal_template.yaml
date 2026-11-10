@@ -1,0 +1,5 @@
+seeds: [1, 2, 3]
+sequences: 64
+lengths: [128, 512, 1024, 2048, 8192, 16384]
+distributions: [gaussian, laplace, student_t3, outlier]
+p_acc: [40, 42,44, 46,48]

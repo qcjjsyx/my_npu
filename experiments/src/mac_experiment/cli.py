@@ -152,6 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
     dist_p.add_argument("--out", default=None, help="write JSON metadata to this file")
 
     sub.add_parser("version", help="print package and schema versions")
+    acc = sub.add_parser("acc-precision-run", help="run accumulation precision reference")
+    acc.add_argument("--config", required=True)
+    rep = sub.add_parser("acc-precision-replay", help="replay saved accumulation representative")
+    rep.add_argument("--run", required=True)
+    rep.add_argument("--index", type=int, default=0)
     return parser
 
 
@@ -464,10 +469,24 @@ def _cmd_version(args) -> int:
     return 0
 
 
+def _cmd_acc_precision_run(args):
+    from .accumulation_precision.runner import run_from_file
+    print(run_from_file(args.config))
+    return 0
+
+
+def _cmd_acc_precision_replay(args):
+    from .accumulation_precision.runner import replay
+    print(json.dumps(replay(args.run, args.index), indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     handlers = {
+        "acc-precision-run": _cmd_acc_precision_run,
+        "acc-precision-replay": _cmd_acc_precision_replay,
         "run": _cmd_run,
         "analyze": _cmd_analyze,
         "enhance": _cmd_enhance,

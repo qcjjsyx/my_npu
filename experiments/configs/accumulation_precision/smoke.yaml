@@ -1,0 +1,5 @@
+seeds: [1]
+sequences: 1
+lengths: [17, 32]
+distributions: [gaussian]
+p_acc: [40, 44, 48]
