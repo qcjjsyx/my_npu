@@ -2,14 +2,14 @@
 
 本项目作为毕业设计推进，研究运行时可配置的多格式乘累加电路，以及计算资源复用、数值精度和硬件代价。面向 LLM 推理，优先考虑 MXFP8、MXFP4 的计算效率，开展设计与评估。
 
-2026-11-05 起的新架构约束记录在[已确认约束](docs/project/decisions.md)：输入格式与乘法组合、计算边界与输入映射、吞吐与并行度基准，以及共享乘法资源方案。这些约束尚未实现或验证，其中仍有多项选择未冻结；本文和旧设计文档都不能作为新架构已经冻结的依据。
+新架构的[IP设计文档](docs/design/new_architecture/IP_DESIGN.md)已于2026-11-14通过用户整体审核，作为后续Verilog实现与功能验证的设计基线；已确认约束与设计依据见[设计决策](docs/project/decisions.md)。当前核心止于ACC完整状态交接，不实现最终FP32/INT32转换或保存恢复。新架构RTL尚未开始，设计审核通过不等于仿真、综合或时序验证完成。
 
 现有 SystemVerilog 基线是旧 dot16/Q2.34 实现，覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域。它仅作为功能参考和验证证据，其 Q2.34、FTZ/Inf 与 MX 输入指数边界不迁移为新架构合同。`hardware/rtl/verilog/` 中的现有文件是旧基线的未完成改写，不是新架构实现。
 
 ## 从哪里开始
 
-1. 阅读[已确认约束](docs/project/decisions.md)，了解新架构已确认的需求和尚未冻结的选择。
-2. 阅读[项目状态](docs/project/status.md)，了解旧基线的已完成工作、证据及限制。
+1. 阅读[新架构IP设计](docs/design/new_architecture/IP_DESIGN.md)与[设计决策](docs/project/decisions.md)，了解已审核的数值、接口、资源和周期合同。
+2. 阅读[项目状态](docs/project/status.md)，区分新架构设计与模型证据、旧基线实现，以及尚未执行的验证。
 3. 阅读[旧基线架构设计](docs/design/IP_Design.md)与[旧基线 RTL 实现说明](docs/design/RTL_Design.md)；两份文档描述 SystemVerilog 基线，不构成新架构合同。
 4. 查看[硬件验证说明](hardware/verification/README.md)、[数值实验指南](docs/experiments/README.md)，按其中的旧基线和模型语义使用证据。
 5. 查看[论文材料](thesis/README.md)；后续架构调整和任务安排由用户确定。
