@@ -43,7 +43,7 @@ def test_align_max_and_rne(tmp_path: Path):
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_align_units", "-o", str(image),
          "hardware/rtl/systemverilog/mac_align_max16.sv", "hardware/rtl/systemverilog/mac_align_rne.sv",
-         "hardware/verification/tb/tb_mac_align_units.sv"],
+         "hardware/verification/legacy_sv/tb/tb_mac_align_units.sv"],
         cwd=ROOT, capture_output=True, text=True,
     )
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

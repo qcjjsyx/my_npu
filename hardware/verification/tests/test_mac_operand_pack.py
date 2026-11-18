@@ -114,7 +114,7 @@ def test_operand_pack_against_integer_reference(tmp_path: Path):
         "iverilog", "-g2012", "-s", "tb_mac_operand_pack", "-o", str(image_path),
         "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/rtl/systemverilog/mac_fp19_convert.sv",
         "hardware/rtl/systemverilog/mac_fp9_convert.sv", "hardware/rtl/systemverilog/mac_operand_pack.sv",
-        "hardware/verification/tb/tb_mac_operand_pack.sv",
+        "hardware/verification/legacy_sv/tb/tb_mac_operand_pack.sv",
     ]
     compiled = subprocess.run(compile_cmd, cwd=ROOT, capture_output=True, text=True)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

@@ -93,7 +93,7 @@ def test_mul_frontend_against_integer_reference(tmp_path: Path):
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_mul_frontend", "-o", str(image),
          "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/rtl/systemverilog/mac_mul_frontend.sv",
-         "hardware/verification/tb/tb_mac_mul_frontend.sv"],
+         "hardware/verification/legacy_sv/tb/tb_mac_mul_frontend.sv"],
         cwd=ROOT, capture_output=True, text=True,
     )
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

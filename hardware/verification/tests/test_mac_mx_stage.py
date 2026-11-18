@@ -192,9 +192,9 @@ def test_mx_stage_against_reference_with_psum_handshake(tmp_path: Path, floating
     _write_vectors(vectors, cases)
     image = tmp_path / "mac_mx_stage.vvp"
     sources = (
-        "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/tb/dwbb_sim_models.sv",
+        "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/legacy_sv/tb/dwbb_sim_models.sv",
         "hardware/rtl/systemverilog/mac_psum_stage.sv", "hardware/rtl/systemverilog/mac_mx_stage.sv",
-        "hardware/verification/tb/tb_mac_mx_stage.sv",
+        "hardware/verification/legacy_sv/tb/tb_mac_mx_stage.sv",
     )
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_mx_stage", "-o", str(image),

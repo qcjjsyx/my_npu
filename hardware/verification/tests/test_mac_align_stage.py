@@ -114,7 +114,7 @@ def _run_align_cases(tmp_path: Path, modes, *, simulate=True):
          "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/rtl/systemverilog/mac_align_max16.sv",
          "hardware/rtl/systemverilog/mac_align_rne.sv", "hardware/rtl/systemverilog/mac_align_lane0.sv",
          "hardware/rtl/systemverilog/mac_align_lane1.sv", "hardware/rtl/systemverilog/mac_align_stage.sv",
-         "hardware/verification/tb/tb_mac_align_stage.sv"],
+         "hardware/verification/legacy_sv/tb/tb_mac_align_stage.sv"],
         cwd=ROOT, capture_output=True, text=True,
     )
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

@@ -1696,7 +1696,7 @@ FP19/INT16 两树都工作；低位宽 DUAL_OUTPUT 中无效组可隔离本树�
 
 当前 `align_lane0_t` 为 signed32；FP19 ALIGN 执行 P<<9 后逐项 RNE。PSUM 高 limb 为 signed9、高树为 signed13，在 signed37 域合并低23位 limb 后检查冗余并提取 signed36 Q7.29。独立 PSUM、真实 ALIGN→PSUM 及完整链路均对照新模型。
 
-Icarus 使用 hardware/verification/tb/dwbb_sim_models.sv 的 test-only 功能模型验证 tree 封装；不是 Synopsys DesignWare 模型、综合或时序证据。本轮执行结果见 hardware/verification/README.md。
+Icarus 使用[仿真功能替身](../../hardware/verification/legacy_sv/tb/dwbb_sim_models.sv)验证 tree 封装。该证据限于功能仿真，Synopsys DesignWare 库验证、综合和时序需单独执行。本轮执行结果见[硬件验证说明](../../hardware/verification/README.md)。
 
 ## 8. MX 电路的架构设计
 

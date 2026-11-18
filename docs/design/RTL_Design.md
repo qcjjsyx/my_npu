@@ -377,7 +377,7 @@ entry/M和ALIGN有未复位数据数组，但valid清0，数据输出有掩码�
 
 ### 7.1 SV文件用途
 
-| 文件（位于 hardware/verification/tb） | DUT/组织 | 激励与主要检查 |
+| 文件（位于 `hardware/verification/legacy_sv/tb/`） | DUT/组织 | 激励与主要检查 |
 |---|---|---|
 | tb_mac_types_pkg.sv | package | 内建检查类型宽度、映射函数和组选择 |
 | tb_mac_operand_pack.sv | operand_pack及转换器 | +VEC，逐项组合输出比对 |
@@ -426,7 +426,7 @@ expected_inf0 expected_inf1
 
 ```sh
 iverilog -g2012 -s tb_mac_types_pkg -o /tmp/mac_types_pkg.vvp \
-  hardware/rtl/systemverilog/mac_types_pkg.sv hardware/verification/tb/tb_mac_types_pkg.sv
+  hardware/rtl/systemverilog/mac_types_pkg.sv hardware/verification/legacy_sv/tb/tb_mac_types_pkg.sv
 vvp /tmp/mac_types_pkg.vvp
 ```
 

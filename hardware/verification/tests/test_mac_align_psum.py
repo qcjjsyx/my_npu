@@ -157,11 +157,11 @@ def test_real_align_to_psum_level_handshake(tmp_path: Path, fp19):
     _write_records(vectors, cases)
     image = tmp_path / "mac_align_psum.vvp"
     sources = (
-        "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/tb/dwbb_sim_models.sv",
+        "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/legacy_sv/tb/dwbb_sim_models.sv",
         "hardware/rtl/systemverilog/mac_align_max16.sv", "hardware/rtl/systemverilog/mac_align_rne.sv",
         "hardware/rtl/systemverilog/mac_align_lane0.sv", "hardware/rtl/systemverilog/mac_align_lane1.sv",
         "hardware/rtl/systemverilog/mac_align_stage.sv", "hardware/rtl/systemverilog/mac_psum_stage.sv",
-        "hardware/verification/tb/tb_mac_align_psum.sv",
+        "hardware/verification/legacy_sv/tb/tb_mac_align_psum.sv",
     )
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_align_psum", "-o", str(image),

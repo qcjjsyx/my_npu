@@ -220,8 +220,8 @@ def test_psum_stage_against_integer_reference_and_backpressure(tmp_path: Path):
     image = tmp_path / "mac_psum_stage.vvp"
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_psum_stage", "-o", str(image),
-         "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/tb/dwbb_sim_models.sv",
-         "hardware/rtl/systemverilog/mac_psum_stage.sv", "hardware/verification/tb/tb_mac_psum_stage.sv"],
+         "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/verification/legacy_sv/tb/dwbb_sim_models.sv",
+         "hardware/rtl/systemverilog/mac_psum_stage.sv", "hardware/verification/legacy_sv/tb/tb_mac_psum_stage.sv"],
         cwd=ROOT, capture_output=True, text=True,
     )
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

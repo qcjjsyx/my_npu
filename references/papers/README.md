@@ -1,6 +1,6 @@
 # 本地文献
 
-当前保留 45 份 PDF，文件内容与迁移前一致。阅读笔记见[算法列举](../../docs/research/量化算法列举.md)和[量化方法](../../docs/research/量化方法.md)；历史笔记中的文献数量反映当时集合，不代表当前文件数。
+当前保留 47 份 PDF（其中 45 份与迁移前文件内容一致，另新增 2 份）。阅读笔记见[算法列举](../../docs/research/量化算法列举.md)和[量化方法](../../docs/research/量化方法.md)；历史笔记中的文献数量反映当时集合，不代表当前文件数。
 
 - [1505.05571v1.pdf](1505.05571v1.pdf)
 - [1703.09039v2.pdf](1703.09039v2.pdf)
@@ -30,6 +30,7 @@
 - [2404.14010v2.pdf](2404.14010v2.pdf)
 - [2405.04532v3.pdf](2405.04532v3.pdf)
 - [2407.08608v2.pdf](2407.08608v2.pdf)
+- [2409.16626v2.pdf](2409.16626v2.pdf)
 - [2411.03149v1.pdf](2411.03149v1.pdf)
 - [2502.01070v4.pdf](2502.01070v4.pdf)
 - [2505.13159v1.pdf](2505.13159v1.pdf)
@@ -43,6 +44,7 @@
 - [2605.20295v1.pdf](2605.20295v1.pdf)
 - [3352460.3358295.pdf](3352460.3358295.pdf)
 - [Computer-Arithmetic-Algorithms-and-Hardware-Designs-2nd-Edition.pdf](Computer-Arithmetic-Algorithms-and-Hardware-Designs-2nd-Edition.pdf)
+- [Exact Fused Dot Product Add Operators.pdf](Exact%20Fused%20Dot%20Product%20Add%20Operators.pdf)
 - [Fused FP8 4-Way Dot Product with Scaling and FP32 Accumulation.pdf](Fused%20FP8%204-Way%20Dot%20Product%20with%20Scaling%20and%20FP32%20Accumulation.pdf)
 - [OCP_Microscaling Formats (MX) v1.0 Spec_Final.pdf](OCP_Microscaling%20Formats%20%28MX%29%20v1.0%20Spec_Final.pdf)
 - [Review_and_Benchmarking_of_Precision-Scalable_Mult.pdf](Review_and_Benchmarking_of_Precision-Scalable_Mult.pdf)

@@ -7,13 +7,13 @@ from reference.mac_contract import ReferenceAccumulator, SourceFormat as F, Tran
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCES = [
-    'hardware/rtl/systemverilog/mac_types_pkg.sv', 'hardware/verification/tb/dwbb_sim_models.sv',
+    'hardware/rtl/systemverilog/mac_types_pkg.sv', 'hardware/verification/legacy_sv/tb/dwbb_sim_models.sv',
     'hardware/rtl/systemverilog/mac_fp19_convert.sv', 'hardware/rtl/systemverilog/mac_fp9_convert.sv', 'hardware/rtl/systemverilog/mac_operand_pack.sv',
     'hardware/rtl/systemverilog/mac_mul_frontend.sv', 'hardware/rtl/systemverilog/mac_entry_m_stage.sv', 'hardware/rtl/systemverilog/mac_align_max16.sv',
     'hardware/rtl/systemverilog/mac_align_rne.sv', 'hardware/rtl/systemverilog/mac_align_lane0.sv', 'hardware/rtl/systemverilog/mac_align_lane1.sv',
     'hardware/rtl/systemverilog/mac_align_stage.sv', 'hardware/rtl/systemverilog/mac_psum_stage.sv', 'hardware/rtl/systemverilog/mac_mx_stage.sv',
     'hardware/rtl/systemverilog/mac_acc_float_prepare36.sv', 'hardware/rtl/systemverilog/mac_acc_stage.sv',
-    'hardware/verification/tb/tb_mac_q234_pipeline.sv',
+    'hardware/verification/legacy_sv/tb/tb_mac_q234_pipeline.sv',
 ]
 
 

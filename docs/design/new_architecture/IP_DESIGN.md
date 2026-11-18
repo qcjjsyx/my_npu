@@ -1,6 +1,6 @@
 # 多精度 MAC 新架构 IP 设计
 
-审核日期：2026-11-14。本文已通过用户整体审核，作为新架构后续Verilog实现与功能验证的设计基线，按计算流程和功能级组织。数值、接口、资源与周期合同见正文及[设计决策](../../project/decisions.md)。设计审核通过不代表RTL实现、仿真或综合完成；当前尚未开始新架构RTL，本次审核状态更新不自动启动实现。
+审核日期：2026-11-14。本文已通过用户整体审核，作为新架构Verilog实现与功能验证的设计基线，按计算流程和功能级组织。数值、接口、资源与周期合同见正文及[设计决策](../../project/decisions.md)。实现与验证进度见[项目状态](../../project/status.md)。
 
 ## 1. 设计目标、边界与总体数据流
 
@@ -46,7 +46,7 @@ K为每次输入每组的项数，G为独立输出组数。FP8支持E4M3FN、E5M
 
 ### 1.3 顶层端口与输入约束
 
-全部端口以clk上升沿为时序基准，rst_n为低有效同步复位。Verilog顶层使用平坦向量，数组只作为内部表示。
+MAC核心的端口以clk上升沿为时序基准，rst_n为低有效同步复位。Verilog顶层使用平坦向量，数组只作为内部表示。
 
 | 端口 | 方向 | 宽度 | 定义 |
 |---|---|---:|---|
@@ -72,7 +72,9 @@ K为每次输入每组的项数，G为独立输出组数。FP8支持E4M3FN、E5M
 
 一份转换器逻辑的端口为clk、rst_n、i_raw[15:0]、i_fmt[2:0]、i_valid和o_fields[21:0]、o_valid。fmt编码依次为0=FP4、1=E4M3FN、2=E5M2、3=BF16、4=FP16、5=INT4、6=INT8、7=INT16；fmt与MAC mode是不同编码。
 
-采用组合解码后一级输出寄存器：在采样i_valid/i_raw/i_fmt的上升沿更新o_fields和o_valid，输出在该边沿后可用；这是一个寄存器级，外部同步接收者最早在下一边沿采样。无ready，连续有效输入每拍一份；气泡令o_valid=0并保持数据寄存器。复位清o_valid和o_fields。此延迟不计入MAC核心周期。
+采用组合解码后一级输出寄存器。在采样i_valid/i_raw/i_fmt的上升沿更新o_fields和o_valid，输出在该边沿后可用，外部同步接收者最早在下一边沿采样。无ready，连续有效输入每拍一份。气泡令o_valid=0并保持数据寄存器。此延迟不计入MAC核心周期。
+
+转换器的rst_n低有效，异步清零o_valid和o_fields。rst_n拉低后，两个输出无需等clk上升沿即清零，低电平期间优先于i_valid。上层复位电路负责在clk域同步释放rst_n，并满足输出寄存器的恢复和移除时序（recovery/removal）。释放时输出保持为零，下一次clk上升沿即可按正常规则采样。
 
 raw的低位先放g0：FP4和INT4依次为bits[3:0]=g0p0、[7:4]=g0p1、[11:8]=g1p0、[15:12]=g1p1；FP8/INT8低字节g0、高字节g1；BF16/FP16/INT16整个字为单元素。
 
@@ -145,6 +147,17 @@ FP16/INT16第j个完整元素（j=0…7）只从输入槽2j取得A/B完整bundle
 
 FP16先把signed15的M拆成unsigned8低段和signed7高段；INT16拆为unsigned8低段和signed8高段。FP16每对只从偶槽提取QA、QB并生成一次T=QA+QB，与四部分积共用同一流水metadata；不能从未用奇槽取得指数。跨前端分发只形成一个完整乘积，不是跨group共享输入。
 
+每个物理前端在R_IN与R_MUL之间使用一颗共享的9-bit无符号指数加法器，每对前端共两颗。A/B各自按mode选择8-bit操作数，零扩展后相加。输入与结果位段如下。
+
+| 模式 | 每侧指数加法器操作数 | R_MUL有效结果 |
+|---|---|---|
+| FP8 | `{1'b0,Q_g1,1'b0,Q_g0}`，Q为各3-bit粗指数 | 每前端 `T[3:0]` 对应g0，`T[7:4]` 对应g1 |
+| BF16 | `E[7:0]`，即bundle[16:9] | 每前端 `T[8:0]` |
+| FP16 | 偶前端将bundle[17:15]零扩展到8位，奇前端输入0 | 每对取偶前端 `T[3:0]` |
+| 其他 | 0 | 无有效指数 |
+
+FP8每组最大指数和为14，在4-bit字段内精确容纳，两个字段可同拍独立求和。FP16/INT16的高部三操作数重构在R_MUL与R_PROD之间完成，具有独立于指数求和的数据通路。
+
 ### 3.3 部分积重构、BF16折叠和物理切分
 
 R_MUL记录32个signed18宽乘积、32个signed10小乘积及指数信息；非活动块输入置0，不另加时钟门控。原生短乘积缩窄只删除冗余符号位。
@@ -160,7 +173,7 @@ P = {H, p00[7:0]}                            // signed32 / signed30
 
 拼接的低场非负，与p11移位项无重叠，所以Hbase精确表达两项之和。交叉项先符号扩展到H位宽，三操作数求和不截去有效位；合法分段范围保证H及两层求和可容纳。p00/p11缩窄只删除已证明冗余的高位。高部可用两层加法或综合映射的压缩结构，不强制手写CSA。此连接替代全宽移位加法，保持E1→E2周期与数值公式，不声称已有时序或面积收益。
 
-BF16在R_MUL后的同一功能阶段执行T=EA+EB（unsigned9），r=T[1:0]、Q=T>>2（unsigned7），P'=sext21(P)<<r。P=0时P'=Q=0。FP8、FP16的乘积指数和使用unsigned4；R_PROD将其零扩展为7位粗指数。其他模式经过同一寄存器边界，不缩短延迟。
+BF16的T=EA+EB（unsigned9）在E1写入R_MUL。E1→E2取r=T[1:0]、Q=T[8:2]（unsigned7），计算P'=sext21(P)<<r。P=0时P'=Q=0。FP8、FP16的乘积指数和使用unsigned4；R_PROD将其零扩展为7位粗指数。其他模式经过同一寄存器边界，不缩短延迟。
 
 R_PROD的逻辑有效载荷：FP4为64×signed9、INT4为64×signed8、FP8为32×(signed16+unsigned7)、BF16为16×(signed21+unsigned7)、FP16为8×(signed30+unsigned7)、INT8为32×signed16、INT16为8×signed32。物理槽和模式路由如上，允许共享寄存器位，但不得改变元素顺序。
 
@@ -187,7 +200,7 @@ e_loc = 4Q*−b−F
 
 ### 4.2 MAX和移位器资源
 
-采用两棵16输入的7-bit非零MAX平衡比较树，叶子带nz标记，合并时优先保留有效叶子，再比较粗指数。A组用于FP8 g0、BF16 g0、FP16 g0；B组用于FP8 g1。FP16只使用A组前8叶，其余nz=0。非对阶模式两树不使能，Q*占位置0。R_MAX同时保存完整乘积及每组Q*/any_nonzero，避免后续事务覆盖所需指数。
+采用两棵16输入的非零MAX平衡比较树，叶子带nz标记，合并时优先保留有效叶子，再比较粗指数。A组用于FP8 g0、BF16 g0、FP16 g0，比较宽度为unsigned7以覆盖BF16 postfold；FP16只使用A组前8叶，其余nz=0。B组只用于FP8 g1，其粗指数和范围为0…14，比较树各级使用unsigned4，只取每项Q_i[3:0]，树输出零扩展为unsigned7后写入R_MAX。非对阶模式两树不使能，Q*占位置0。R_MAX同时保存R_PROD载荷及两组unsigned7 Q*和any_nonzero，避免后续事务覆盖所需指数。
 
 移位器A组为8个38-bit加8个32-bit，B组为16个32-bit，共32条通路。A组前8条在FP8/BF16模式将32-bit对阶输入高位符号扩展为38位再移位，结果低32位与原32-bit算术移位一致；FP16使用全部38位结果。其余A/B通路服务相应FP8/BF16元素。这样只扩宽8条必要通路，不另设8条独立FP16移位器。
 
@@ -448,7 +461,7 @@ o_pipe_empty为R_IN至R_ACC2全部valid之OR取反，不计上下文占用。最
 
 | 范围 | 验证目标 |
 |---|---|
-| 转换器 | 全格式分类、E4M3FN高指数有限数、正负零、FP8两格式/FP16/BF16的E_raw=0且fraction非零，验证hidden=0、Eeff=1；NaN/Inf映射、INT4四nibble顺序与一级valid |
+| 转换器 | 全格式分类、E4M3FN高指数有限数、正负零、FP8两格式/FP16/BF16的E_raw=0且fraction非零，验证hidden=0、Eeff=1；NaN/Inf映射、INT4四nibble顺序与一级valid；运行中异步清零输出、复位优先级及释放后恢复采样 |
 | 乘法前端 | 每格式映射、FP8双向异格式、FP16/INT16偶槽广播、奇槽忽略、未用高位扰动、低8位旁路与高部三操作数重构、BF16最大T=508 |
 | MAX/对阶 | 两组不同Q*、零乘积排除、全零、负数大移位为−1、32/38位复用边界、无局部RNE |
 | 归约 | limb低和unsigned22及跨19位进位、负高和、packing低场偏置及高场符号、极值和相消 |
@@ -469,8 +482,10 @@ DONE无在途不变式：对同一采样时刻，DONE[c]成立时R_IN…R_ACC2�
 
 [累加位级模型](../../../hardware/verification/reference/new_arch/acc_fixed.py)与[独立精确oracle](../../../hardware/verification/reference/new_arch/oracle.py)分开实现；[T0–T5测试](../../../hardware/verification/tests/test_acc_fixed_model.py)覆盖小精度穷举、p=40定向边界、变形性质、代表轨迹与范围端点。模型允许的恢复状态检查不代表本硬件提供恢复接口。既有通过记录见[项目状态](../../project/status.md)，不把历史测试数量当成本次运行结果。
 
-[局部对阶实验](../../experiments/README.md)用后续精确累计隔离局部误差；[累加精度实验](../../experiments/accumulation_precision.md)评价逐份加后RNE的状态精度。packing/limb已有Python算术抽查，尚无完整转换器、前端或RTL验证。随机通过不等于全部输入形式证明。
+[局部对阶实验](../../experiments/README.md)用后续精确累计隔离局部误差；[累加精度实验](../../experiments/accumulation_precision.md)评价逐份加后RNE的状态精度。packing/limb已有Python算术抽查。
 
-本文的完整设计合同已通过用户整体审核，包括前向流水、接口与审查修订；尚无RTL、共仿、综合、时序或PPA证据。后续先实现定向功能与周期验证，再开展服务器详细验证及物理评估。若物理评估需要改变ACC段数、D或上下文数，应重新审定相关周期合同，不能以保持模块名称为由静默改变行为。
+独立输入转换器已完成 Verilog-2001 实现。Icarus 共仿逐位比较 8 种 `fmt` 的全部 16-bit raw 字及定向时序用例，验收范围为第 2 章。见[验证入口](../../../hardware/verification/README.md#新架构独立输入转换器)。
+
+MAC 核心 RTL、功能与周期共仿、综合、时序和PPA仍待实施。若物理评估需要改变ACC段数、D或上下文数，应重新审定相关周期合同。
 
 2026-11-12检查：文档链接及diff空白检查通过；现有累加模型T0/T2/T5定向测试14项通过、6项未选择，见[日志](../../../results/verification/ip_design_review_20261112/acc_directed.log)。这些测试不验证本稿新增的周期与接口。

@@ -22,7 +22,7 @@ RTL = (
 def _compile(tb: str, image: Path) -> None:
     result = subprocess.run(
         ["iverilog", "-g2012", "-s", tb, "-o", str(image), *RTL,
-         f"hardware/verification/tb/{tb}.sv"],
+         f"hardware/verification/legacy_sv/tb/{tb}.sv"],
         cwd=ROOT, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr

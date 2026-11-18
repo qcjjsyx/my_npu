@@ -2,9 +2,9 @@
 
 本项目作为毕业设计推进，研究运行时可配置的多格式乘累加电路，以及计算资源复用、数值精度和硬件代价。面向 LLM 推理，优先考虑 MXFP8、MXFP4 的计算效率，开展设计与评估。
 
-新架构的[IP设计文档](docs/design/new_architecture/IP_DESIGN.md)已于2026-11-14通过用户整体审核，作为后续Verilog实现与功能验证的设计基线；已确认约束与设计依据见[设计决策](docs/project/decisions.md)。当前核心止于ACC完整状态交接，不实现最终FP32/INT32转换或保存恢复。新架构RTL尚未开始，设计审核通过不等于仿真、综合或时序验证完成。
+新架构的[IP设计文档](docs/design/new_architecture/IP_DESIGN.md)已于2026-11-14通过用户整体审核，作为Verilog实现与功能验证的设计基线。已确认约束与设计依据见[设计决策](docs/project/decisions.md)。独立输入转换器已完成RTL实现和本机仿真，MAC核心设计边界为ACC完整状态交接。实现与验证进度见[项目状态](docs/project/status.md)。
 
-现有 SystemVerilog 基线是旧 dot16/Q2.34 实现，覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域。它仅作为功能参考和验证证据，其 Q2.34、FTZ/Inf 与 MX 输入指数边界不迁移为新架构合同。`hardware/rtl/verilog/` 中的现有文件是旧基线的未完成改写，不是新架构实现。
+现有 SystemVerilog 基线是旧 dot16/Q2.34 实现，覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域，保留作旧基线功能参考。`hardware/rtl/verilog/` 根层四个文件是旧基线的未完成改写。新架构源文件位于 `hardware/rtl/verilog/new_arch/`。
 
 ## 从哪里开始
 
@@ -53,7 +53,7 @@ python3 -m venv .venv
 # 只做快速的完整性和链接检查
 .venv/bin/python scripts/check_project.py --checks integrity links
 
-# 全部 442 项测试；两套测试可分别指定 hardware/verification/tests 或 experiments/tests
+# 全部测试（含阶段 1 之前的 570 项及 9 项独立转换器共仿测试）
 .venv/bin/python -m pytest -q
 
 # 运行已交付的 TXT 向量
@@ -72,4 +72,4 @@ python3 -m venv .venv
 
 旧基线在 2026-10-31 目录重组后的回归：硬件验证 134 项、实验框架 308 项，合计 **442 项通过**；完整 TXT 向量的连续输入、停顿和四类负例检查通过。具体记录见[项目状态](docs/project/status.md)。
 
-旧基线目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与旧基线 Q2.34 硬件语义不同。新架构尚无 RTL 实现或验证证据；有关设计结论必须结合各自的验证范围使用。
+旧基线目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与旧基线 Q2.34 硬件语义不同。新架构已穷举验证独立转换器的 8 种格式及全部 16-bit raw 字，MAC 核心 RTL、周期共仿与物理评估仍待实施。

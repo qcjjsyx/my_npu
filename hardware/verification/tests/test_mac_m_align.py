@@ -16,7 +16,7 @@ def test_m_align_int16_phases_fp9_and_backpressure(tmp_path: Path):
         "hardware/rtl/systemverilog/mac_mul_frontend.sv", "hardware/rtl/systemverilog/mac_entry_m_stage.sv",
         "hardware/rtl/systemverilog/mac_align_max16.sv", "hardware/rtl/systemverilog/mac_align_rne.sv",
         "hardware/rtl/systemverilog/mac_align_lane0.sv", "hardware/rtl/systemverilog/mac_align_lane1.sv",
-        "hardware/rtl/systemverilog/mac_align_stage.sv", "hardware/verification/tb/tb_mac_m_align.sv",
+        "hardware/rtl/systemverilog/mac_align_stage.sv", "hardware/verification/legacy_sv/tb/tb_mac_m_align.sv",
     )
     compiled = subprocess.run(
         ["iverilog", "-g2012", "-s", "tb_mac_m_align", "-o", str(image),

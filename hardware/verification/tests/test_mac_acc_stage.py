@@ -234,7 +234,7 @@ def test_acc_stage_matches_q234_reference_and_state_handshake(tmp_path: Path):
         [
             "iverilog", "-g2012", "-s", "tb_mac_acc_stage", "-o", str(image),
             "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/rtl/systemverilog/mac_acc_float_prepare36.sv",
-            "hardware/rtl/systemverilog/mac_acc_stage.sv", "hardware/verification/tb/tb_mac_acc_stage.sv",
+            "hardware/rtl/systemverilog/mac_acc_stage.sv", "hardware/verification/legacy_sv/tb/tb_mac_acc_stage.sv",
         ],
         cwd=ROOT, capture_output=True, text=True,
     )
@@ -256,7 +256,7 @@ def test_acc_rtl_compiles(tmp_path, synthesis_macro):
     result = subprocess.run(args + [
         "-s", "tb_mac_acc_stage", "-o", str(tmp_path / "acc.vvp"),
         "hardware/rtl/systemverilog/mac_types_pkg.sv", "hardware/rtl/systemverilog/mac_acc_float_prepare36.sv",
-        "hardware/rtl/systemverilog/mac_acc_stage.sv", "hardware/verification/tb/tb_mac_acc_stage.sv",
+        "hardware/rtl/systemverilog/mac_acc_stage.sv", "hardware/verification/legacy_sv/tb/tb_mac_acc_stage.sv",
     ], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -275,7 +275,7 @@ def test_acc_rejects_undefined_input_and_phase(tmp_path,bad,marker):
     compiled=subprocess.run([
         'iverilog','-g2012','-s','tb_mac_acc_stage','-o',str(image),
         'hardware/rtl/systemverilog/mac_types_pkg.sv','hardware/rtl/systemverilog/mac_acc_float_prepare36.sv',
-        'hardware/rtl/systemverilog/mac_acc_stage.sv','hardware/verification/tb/tb_mac_acc_stage.sv',
+        'hardware/rtl/systemverilog/mac_acc_stage.sv','hardware/verification/legacy_sv/tb/tb_mac_acc_stage.sv',
     ],cwd=ROOT,capture_output=True,text=True)
     assert compiled.returncode==0,compiled.stdout+compiled.stderr
     result=subprocess.run(['vvp',str(image),f'+VEC={vec}',f'+BAD={bad}'],cwd=ROOT,capture_output=True,text=True)

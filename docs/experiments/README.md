@@ -13,7 +13,7 @@
 | accumulation_precision | `accumulation_precision/smoke.yaml`、`formal_template.yaml`；固定局部路径，扫描可配置 p_acc>=40 | `results/numerical/accumulation_precision/runs/` | 每个 run 内 JSON/CSV |
 | widthselect | `widthselect_*`；对阶、累加及联合位宽扫描 | `results/numerical/widthselect/runs/` | 同级 `analysis/` |
 
-旧 YAML 在 `experiments/configs/legacy/` 下，新实验配置在 `experiments/configs/local_alignment/` 下。`output_root` 可显式指定，离线分析支持 `--out`；相对路径按当前工作目录解释，因此以下命令从项目根目录运行。
+旧 YAML 在 `experiments/configs/legacy/` 下，新实验配置分别在 `experiments/configs/local_alignment/` 与 `experiments/configs/accumulation_precision/` 下。`output_root` 可显式指定，离线分析支持 `--out`；相对路径按当前工作目录解释，因此以下命令从项目根目录运行。
 
 ```sh
 # 日常小规模实验：每次执行创建运行目录；固定 run_name 的配置重复运行会拒绝覆盖
@@ -39,7 +39,7 @@
 新架构当前采用误差指标报告与对照分析，不设统一数值精度通过阈值。实验须明确输入范围、配置及比较条件，分别解释局部截断、状态累加和外部最终转换的误差；功能验收仍要求RTL与已定数值合同的独立参考模型逐位一致，不能以误差容限放宽。具体约定见[新架构IP设计的验证要求](../design/new_architecture/IP_DESIGN.md)。后续若指定模型任务及应用精度要求，再另行确定对应门槛；历史实验保留原有口径。
 
 - 实验包采用精确 dyadic 表示与明确舍入策略，分析对阶、累加、位匹配和 ULP 等指标；配置和 manifest 描述具体实验语义。
-- 硬件逐笔预言机独立位于 `hardware/verification/reference/`，采用旧基线 Q2.34/bias127 合同（该合同不适用于 2026-11-05 新架构，见[已确认约束](../project/decisions.md)）；它不依赖本实验包。实验中的 FP32 或早期 `hwacc-v1` 累加器不能替代这个模型。
+- 硬件逐笔预言机独立位于 `hardware/verification/reference/`：顶层模型采用旧基线 Q2.34/bias127 合同（不适用于新架构），子目录 `new_arch/` 提供新架构累加器的有限工作位黄金模型与独立精确 oracle（见[已确认约束](../project/decisions.md)）；它们均不依赖本实验包。实验中的 FP32 或早期 `hwacc-v1` 累加器不能替代这些硬件参考模型。
 - 主误差口径区分量化误差、对阶损失、累加损失；非有限样本按显式状态报告。未配置精度阈值时只报告结果，不自行认定某个位宽合格。
 - 对齐与累加的具体方法见[基础设计](design.md)、[MX 语义](mx_semantics.md)、[固定对阶](mx_alignment.md)、[位宽选择](mac_width_selection.md)和[历史验证记录](verification.md)。
 

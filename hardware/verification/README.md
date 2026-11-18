@@ -1,12 +1,28 @@
-# 旧基线 MAC Q2.34 参考模型与验证
+# 硬件参考模型与验证
 
-> 适用范围：本文记录旧 SystemVerilog dot16/Q2.34 基线。文中的 Q2.34 累加、FTZ/Inf 写回、MX 输入指数 1…254 边界及 dot16 事务语义只适用于该基线，不是 2026-11-05 新架构的数值合同；新架构已确认范围与未冻结项见[已确认约束](../../docs/project/decisions.md)。
+## 新架构独立输入转换器
+
+[新架构 IP 设计](../../docs/design/new_architecture/IP_DESIGN.md#2-独立输入转换)第 2 章定义输入映射与周期。pytest 使用 `iverilog -g2001` 编译[独立清单](../filelists/new_arch_convert.f)，用 `vvp` 执行 [testbench](tb/tb_new_arch_mac_input_convert.v)。[Python 参考函数](reference/new_arch/input_convert.py)按原格式解码精确二进制值，再按目标字段位权打包。
+
+从项目根目录运行转换器测试。
+
+```sh
+.venv/bin/python -m pytest -q hardware/verification/tests/test_new_arch_input_convert.py
+```
+
+8 个穷举用例逐位对照每种 `fmt` 的 65,536 个 raw 字及 22 位输出。另一个定向用例用手算 bundle 交叉检查参考模型，并检查连续输入、格式切换和气泡保值。用例在 `rst_n` 拉低后、下一次时钟上升沿前检查 `o_fields` 和 `o_valid` 已清零，同时检查复位低电平期间优先于有效输入，以及释放后恢复采样。整数最小负码的原样传递属于转换器行为，MAC 运算的整数输入域仍按设计第 1.3 节。
+
+## 旧 SystemVerilog 基线
+
+> 下文的 Q2.34 累加、FTZ/Inf 写回、MX 输入指数 1…254 边界及 dot16 事务语义适用于旧基线。新架构约束见[设计决策](../../docs/project/decisions.md)。
 
 旧基线设计见 [IP_Design.md](../../docs/design/IP_Design.md)。第二阶段已迁移 ALIGN、PSUM、MX、ACC RTL 及配套 testbench。独立 Python 数值模型保持不变，所有阶段与完整链路对照该模型；原旧格式 skip/xfail 已移除。
 
+旧基线的 SystemVerilog testbench 和 DesignWare 仿真替身归档在 [`legacy_sv/tb/`](legacy_sv/tb/)，pytest 和 TXT 向量运行器从这里编译。`tb/` 用于新架构测试台。
+
 ## 目录重组后运行（2026-10-31）
 
-从项目根目录执行 `.venv/bin/python -m pytest -q hardware/verification/tests`；根 `pyproject.toml` 已配置参考模型和工具的导入路径。Python 测试位于 `tests/`，SV testbench 与 DesignWare 仿真替身位于 `tb/`，运行工具位于 `tools/`。
+从项目根目录执行 `.venv/bin/python -m pytest -q hardware/verification/tests`。根 `pyproject.toml` 已配置参考模型和工具的导入路径。Python 测试位于 `tests/`，运行工具位于 `tools/`。
 
 此次新环境回归中硬件 134 项通过，连同实验框架 308 项共 442 项通过。现有完整 TXT 向量连续和停顿测试、四类负例均通过。下文 2026-10-07/09 的记录为原始历史记录，所述数值合同只对旧基线继续适用。SystemVerilog、参考模型、testbench 和原始向量文件内容保持一致。
 

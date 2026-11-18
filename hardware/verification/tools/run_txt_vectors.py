@@ -8,11 +8,11 @@ import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[3]
-PACK_SOURCES=['hardware/rtl/systemverilog/mac_types_pkg.sv','hardware/rtl/systemverilog/mac_fp19_convert.sv','hardware/rtl/systemverilog/mac_fp9_convert.sv','hardware/rtl/systemverilog/mac_operand_pack.sv','hardware/verification/tb/tb_pack_txt.sv']
-MAC_SOURCES=['hardware/rtl/systemverilog/mac_types_pkg.sv','hardware/verification/tb/dwbb_sim_models.sv','hardware/rtl/systemverilog/mac_mul_frontend.sv',
+PACK_SOURCES=['hardware/rtl/systemverilog/mac_types_pkg.sv','hardware/rtl/systemverilog/mac_fp19_convert.sv','hardware/rtl/systemverilog/mac_fp9_convert.sv','hardware/rtl/systemverilog/mac_operand_pack.sv','hardware/verification/legacy_sv/tb/tb_pack_txt.sv']
+MAC_SOURCES=['hardware/rtl/systemverilog/mac_types_pkg.sv','hardware/verification/legacy_sv/tb/dwbb_sim_models.sv','hardware/rtl/systemverilog/mac_mul_frontend.sv',
  'hardware/rtl/systemverilog/mac_align_max16.sv','hardware/rtl/systemverilog/mac_align_rne.sv','hardware/rtl/systemverilog/mac_align_lane0.sv','hardware/rtl/systemverilog/mac_align_lane1.sv',
  'hardware/rtl/systemverilog/mac_align_stage.sv','hardware/rtl/systemverilog/mac_psum_stage.sv','hardware/rtl/systemverilog/mac_mx_stage.sv','hardware/rtl/systemverilog/mac_acc_float_prepare36.sv',
- 'hardware/rtl/systemverilog/mac_acc_stage.sv','hardware/verification/tb/tb_mac_packed_txt.sv']
+ 'hardware/rtl/systemverilog/mac_acc_stage.sv','hardware/verification/legacy_sv/tb/tb_mac_packed_txt.sv']
 NEGATIVES={'missing_first':'ACC state requires acc_first','scale255':'MX active group requires finite E8M0 scales',
  'mx_exponent':'MX input exponent boundary deferred','phase1':'INT16 phase1 arrived without phase0'}
 
