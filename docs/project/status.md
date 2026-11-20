@@ -1,10 +1,14 @@
 # 项目状态
 
-状态更新日期：2026-11-18。下文旧基线证据日期为2026-10-31。
+状态更新日期：2026-11-19。下文旧基线证据日期为2026-10-31。
 
 本文记录新架构的设计、RTL 验证与数值实验证据，以及旧 SystemVerilog dot16/Q2.34 基线的历史实现与验证状态。新架构已审核设计约束、验证边界及后续候选见[已确认约束](decisions.md)。
 
 ## 新架构设计与证据
+
+- **阶段 3 MAC 核心**：[顶层 RTL](../../hardware/rtl/verilog/new_arch/mac_core.v)及[独立周期参考](../../hardware/verification/reference/new_arch/mac_core.py)已完成。40 项共仿、648 项全量回归通过。共仿覆盖双路 ACC、E0→E11 的固定 11 个时钟间隔、D=3 三槽交错、完成状态交接、复位和异常调度断言。10 种合法 `mode/mx` 组合均验证 16384 项定向长点积。见[核心与 ACC 验证](../../hardware/verification/README.md#新架构-mac-核心与-acc)。
+
+- **阶段 2 MAC 前向链**：[RTL](../../hardware/rtl/verilog/new_arch/mac_forward.v)及[独立 Python 参考](../../hardware/verification/reference/new_arch/forward.py)已完成。29 项 Verilog-2001 共仿通过，逐拍检查 E0→E8 的固定八个时钟间隔、各级有效数据和元数据，覆盖 10 种合法 `mode/mx` 组合。阶段 2 全量回归 608 项通过。见[前向链验证](../../hardware/verification/README.md#新架构-mac-前向链)。
 
 - **阶段 1 独立输入转换器**：[RTL](../../hardware/rtl/verilog/new_arch/mac_input_convert.v)及[独立 Python 参考](../../hardware/verification/reference/new_arch/input_convert.py)于 2026-11-17 完成，阶段 1 初版全量回归 579 项通过。2026-11-18 将输出寄存器改为低有效异步清零，由上层在转换器时钟域同步释放复位。更新后 Verilog-2001 共仿 9 项、硬件验证回归 163 项通过。共仿覆盖 524,288 组 `fmt/raw` 的 22 位输出，以及格式切换、一级 valid、气泡保持、沿间复位清零和释放后恢复采样。复现命令见[硬件验证说明](../../hardware/verification/README.md#新架构独立输入转换器)。
 
@@ -12,14 +16,9 @@
 
 - 2026-11-14审查修订：明确Eeff、MAC有效位切片、scale宽域临时量及逐输入合法性检查；补充每前端R_IN→R_MUL共享9-bit无符号指数加法器、BF16指数和E1写入R_MUL并于E1→E2执行postfold、非零MAX树A组unsigned7与B组unsigned4比较；采用低8位旁路重构和MX符号异或检测/负端修正，补充X隔离及限定浮点非旁路的T!=-1断言。当前仍为三段ACC、D=3；四段ACC仅为实际时序紧张后的候选。
 
-- ACC周期设计已确认：组合读状态，S1对阶、S2加法、S3直接写回；同ctx的S1结果在E0采样、E2写回、E3再次采样，D=3且无写回旁路。前向各模式等固定延迟、保留气泡；全部计算流水valid为0作为排空判据。此为设计决定，RTL周期和时序尚未验证。
-
-- MAC 核心边界已明确为 ACC 上下文状态寄存器及完整状态交接。内部固定 valid 流水；last 更新写回后标记完成，状态原槽保持至外部接收后释放。G=2 两路独立累加并共同交接，G=1仅更新ACC0。最终 FP32/INT32 转换及后续结果缓冲位于外部，核心不设置结果 FIFO 或 last 容量预留。已选三个配对事务槽、2-bit ctx_id、free/done位图与指定编号读取，状态无损打包为每路51位，接收后下一拍可复用。正常计算valid-only，外部保证合法调度，全部槽释放并排空后切换模式。不实现中途状态保存恢复或外部初值装载，仅允许完成状态读取；普通暂停保留原槽后续算。模式编码、复位及前向具体流水已通过整体审核；尚无周期模型或 RTL 验证。
-
-- 共享乘法资源映射、局部截断归约、逐份贡献加后RNE40、多上下文交错及有限工作位补码数据通路已选定；位级数据通路为2位真实低位＋sticky、45位共享加法器、三段流水（D=3）、两条累加通路各3组上下文。位级模型与T0–T5检查已实现并在本地通过；RTL、共仿、综合与时序未开始；保存恢复不在实现范围，前向周期设计已通过整体审核。
-- 入口转换、22-bit字段bundle、16前端group/块映射、2棵16输入树加41-bit最终加法器的归约结构、FP16 19/19 limb重构、FP4/INT4 offset-binary packing及N41/e_loc/h输出接口已确认。MAC前向算术已有Python随机与枚举核对。
+- MAC 核心止于 ACC 状态交接。E11 的 last 写回使上下文变为 DONE，状态留在原槽至指定读取握手，释放后的下一拍可复用。G=2 两路独立累计并共同交接，每路状态 51 位。外部提供合法调度，并在三个槽均已释放且流水排空后切换模式。
 - 已有[局部对阶实验](../experiments/README.md)和[累加精度实验](../experiments/accumulation_precision.md)的数值模型与运行结果。局部实验用后续精确累计隔离局部损失；累加实验用精确dyadic相加后RNE评价状态精度。二者的配置、覆盖范围及结论边界见各自说明与[已确认约束](decisions.md)，不能替代有限工作位电路或全部合法输入域的验证。
-- MAC核心RTL、端到端仿真、综合、时序和PPA仍待实施。
+- 新架构的 GLS、综合、STA 和 PPA 仍待实施。
 - [新架构IP设计文档](../design/new_architecture/IP_DESIGN.md)覆盖总体接口、独立转换、乘法配对连接、MAX/对阶资源、两树归约、MX、ACC、完成读取、物理寄存器及验证场景。核心采用入口E0至E11写回的固定延迟、8条38-bit加24条32-bit对阶器、两棵分拍平衡树、同步复位和无效读取清零。
 
 后续架构调整和任务顺序由用户确定。以下保留设计审核期间的模型验证记录。
@@ -59,6 +58,6 @@
 
 ## 文档的使用顺序
 
-[已确认约束](decisions.md)是新架构已审核范围与验证边界的入口。[RTL 实现说明](../design/RTL_Design.md)用于理解旧 SystemVerilog 基线的代码事实，[架构设计](../design/IP_Design.md)用于理解旧基线的设计合同，[硬件验证说明](../../hardware/verification/README.md)用于理解旧基线的数值域与执行证据；这三份文档不构成新架构合同。发生差异时，先核对对应 RTL、独立模型和测试，再修订文档；涉及新架构语义时以 decisions.md 和用户后续确认为准。
+[已确认约束](decisions.md)是新架构已审核范围与验证边界的入口。[RTL 实现说明](../design/RTL_Design.md)和[架构设计](../design/IP_Design.md)描述旧 SystemVerilog 基线。[硬件验证说明](../../hardware/verification/README.md)给出新旧两套实现各自的执行入口与证据。发生差异时，先核对对应 RTL、独立模型和测试，再修订文档。涉及新架构语义时以新 IP 设计、已确认约束和用户后续确认为准。
 
 [历史 ACC 交接说明](../../archive/handoffs/ACC36_REDESIGN_HANDOFF.md)记录迁移前的阶段决定，其中的未完成状态已被后续工作部分取代。

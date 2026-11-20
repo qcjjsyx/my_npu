@@ -7,7 +7,7 @@ T3  metamorphic properties (translation, negation, swap, zero)
 T4  real local-contribution traces from the accumulation_precision run
 T5  range endpoints and analytic-lemma assertions
 
-T6 (RTL co-simulation) is intentionally absent until the Verilog exists.
+The RTL arithmetic and cycle co-simulation is in test_new_arch_mac_core.py.
 """
 
 from __future__ import annotations

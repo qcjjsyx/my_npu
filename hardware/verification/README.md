@@ -12,6 +12,34 @@
 
 8 个穷举用例逐位对照每种 `fmt` 的 65,536 个 raw 字及 22 位输出。另一个定向用例用手算 bundle 交叉检查参考模型，并检查连续输入、格式切换和气泡保值。用例在 `rst_n` 拉低后、下一次时钟上升沿前检查 `o_fields` 和 `o_valid` 已清零，同时检查复位低电平期间优先于有效输入，以及释放后恢复采样。整数最小负码的原样传递属于转换器行为，MAC 运算的整数输入域仍按设计第 1.3 节。
 
+## 新架构 MAC 前向链
+
+[`new_arch_mac_forward`](../rtl/verilog/new_arch/mac_forward.v) 在 E0 接收两侧各 16 个 22-bit 字段，在 E8 产生两组 `M_v[40:0]`、`H_v[9:0]`、`I_v[44:0]`。共用 `o_meta[7:0]={mode,mx,ctx,first,last}` 与 `o_valid`。`o_pipe_empty` 反映该子模块 E0 至 E8 的九个 valid。复位按 MAC 核心合同同步清 valid。
+
+从项目根目录运行共仿。
+
+```sh
+.venv/bin/python -m pytest -q hardware/verification/tests/test_new_arch_mac_forward.py
+```
+
+共仿通过 [Verilog-2001 清单](../filelists/new_arch_mac.f) 编译。[Python 参考](reference/new_arch/forward.py)从 22-bit 字段直接计算完整整数乘积、非零 MAX、逐项 floor、直接求和与精确规格化。[testbench](tb/tb_new_arch_mac_forward.v)逐拍检查 E0 至 E8 的 valid、元数据和各级有效载荷，并独立驱动 MX 算术单元。
+
+29 项测试覆盖 10 种合法 `mode/mx` 组合、FP8 四种格式组合、宽乘积部分积、BF16 最大指数和、未用输入位及奇槽扰动、32/38-bit 对阶边界、FP16 limb 进位、FP4/INT4 packing 极值与相消、MX 两组 scale 端点及同块两份 dot16。时序用例检查同步复位清空在途 valid、气泡、连续输入和 X 态隔离。非法模式、MX 组合、scale 和整数最小负码由 testbench 断言。混合模式相邻输入用于前向子模块的元数据压力测试，完整核心共仿另行检查批次约束。
+
+## 新架构 MAC 核心与 ACC
+
+[`new_arch_mac_core`](../rtl/verilog/new_arch/mac_core.v) 使用 [`new_arch_mac.f`](../filelists/new_arch_mac.f) 编译，顶层端口见 [IP 设计第 1.3 节](../../docs/design/new_architecture/IP_DESIGN.md#13-顶层端口与输入约束)。E9 采样对阶结果，E10 采样 45-bit 加法结果，E11 直接更新两路的状态槽。同一 ctx 按 `D=3` 供数时，下一次对阶读取上一笔刚写回的状态。结果从 DONE 槽按编号读取，两个状态各 51 位。
+
+```sh
+.venv/bin/python -m pytest -q hardware/verification/tests/test_new_arch_mac_core.py
+```
+
+40 项测试包括以下范围。
+
+- ACC 算术模块用 4,543 组有效向量对照 [补码工作位模型](reference/new_arch/acc_fixed.py)和[精确整数 RNE40](reference/new_arch/oracle.py)。覆盖正负平局及奇偶、超宽移位、深度抵消、`d=3/σ=1`、`T=-2`、正负重规格化、整数端点及合法整数 `T=-1`。浮点非旁路 `T=-1` 由独立断言拒绝。
+- [周期参考](reference/new_arch/mac_core.py)从字段直接求局部贡献并用精确整数累计或加后 RNE40。[testbench](tb/tb_new_arch_mac_core.v)对照每次 E11 写回及上升沿前后的结果、位图、排空和流水元数据。10 种合法 `mode/mx` 组合均覆盖三槽交错和 16,384 项定向长点积。
+- 控制验证覆盖零贡献 last、等待与按编号释放、不同槽的同拍读写与接收、释放后下一拍复用、批次切换和同步复位取消在途事务。断言同时检查 DONE 槽无在途记录、G=1 的 ACC1 输入隔离和状态保留，以及非法 ctx、提前重访和非法生命周期操作。
+
 ## 旧 SystemVerilog 基线
 
 > 下文的 Q2.34 累加、FTZ/Inf 写回、MX 输入指数 1…254 边界及 dot16 事务语义适用于旧基线。新架构约束见[设计决策](../../docs/project/decisions.md)。

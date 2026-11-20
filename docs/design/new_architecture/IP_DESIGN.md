@@ -113,6 +113,8 @@ raw的低位先放g0：FP4和INT4依次为bits[3:0]=g0p0、[7:4]=g0p1、[11:8]=g
 
 每个物理前端配置 2 颗 signed9×signed9（W0/W1）和 2 颗 signed5×signed5（S0/S1）。16 前端共 32 颗宽块、32 颗小块。
 
+RTL 中，每个 `new_arch_mac_mul_cluster` 由偶、奇两个 `new_arch_mac_mul_lane` 组成。簇内负责偶槽广播、R_MUL 寄存及 FP16/INT16 部分积重构。`new_arch_mac_mul_frontend` 按正整数参数 `CLUSTER_COUNT` 例化乘法簇，端口位宽随簇数变化。它在 R_PROD 将每簇的宽乘积依次写入低位槽，其他模式按物理 lane 编号写入。MAC 实例固定使用 8 个簇，对应本文的 16 个物理前端。
+
 | 模式 | W0 | W1 | S0 | S1 | 完整乘积/前端（对） | K/G |
 |---|---|---|---|---|---|---:|
 | FP4 | g0p0 | g1p0 | g0p1 | g1p1 | 4 | 32/2 |
@@ -486,6 +488,10 @@ DONE无在途不变式：对同一采样时刻，DONE[c]成立时R_IN…R_ACC2�
 
 独立输入转换器已完成 Verilog-2001 实现。Icarus 共仿逐位比较 8 种 `fmt` 的全部 16-bit raw 字及定向时序用例，验收范围为第 2 章。见[验证入口](../../../hardware/verification/README.md#新架构独立输入转换器)。
 
-MAC 核心 RTL、功能与周期共仿、综合、时序和PPA仍待实施。若物理评估需要改变ACC段数、D或上下文数，应重新审定相关周期合同。
+MAC 前向 E0→E8 已完成 Verilog-2001 实现和各级逐位、逐拍共仿。E8 输出双组贡献及共用 meta/valid，作为 ACC S1 的输入。覆盖范围见[前向链验证](../../../hardware/verification/README.md#新架构-mac-前向链)。
+
+双路 ACC、上下文控制和完整核心接口已完成 Verilog-2001 实现。阶段 3 共仿逐位、逐拍检查 E11 写回与完成状态读取，覆盖 D=3 三槽交错、合法模式的 16384 项定向长点积和本章所列的 RTL 控制场景。覆盖范围和复现命令见[核心与 ACC 验证](../../../hardware/verification/README.md#新架构-mac-核心与-acc)。
+
+GLS、综合、STA 和 PPA 属于后续物理评估。若物理评估需要改变 ACC 段数、D 或上下文数，应重新审定相关周期合同。
 
 2026-11-12检查：文档链接及diff空白检查通过；现有累加模型T0/T2/T5定向测试14项通过、6项未选择，见[日志](../../../results/verification/ip_design_review_20261112/acc_directed.log)。这些测试不验证本稿新增的周期与接口。

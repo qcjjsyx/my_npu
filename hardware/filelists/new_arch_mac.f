@@ -1,0 +1,10 @@
+hardware/rtl/verilog/new_arch/mac_mul_lane.v
+hardware/rtl/verilog/new_arch/mac_mul_cluster.v
+hardware/rtl/verilog/new_arch/mac_mul_frontend.v
+hardware/rtl/verilog/new_arch/mac_align.v
+hardware/rtl/verilog/new_arch/mac_reduce.v
+hardware/rtl/verilog/new_arch/mac_mx.v
+hardware/rtl/verilog/new_arch/mac_forward.v
+hardware/rtl/verilog/new_arch/mac_acc_lane.v
+hardware/rtl/verilog/new_arch/mac_ctx_control.v
+hardware/rtl/verilog/new_arch/mac_core.v
