@@ -2,7 +2,7 @@
 
 本项目作为毕业设计推进，研究运行时可配置的多格式乘累加电路，以及计算资源复用、数值精度和硬件代价。面向 LLM 推理，优先考虑 MXFP8、MXFP4 的计算效率，开展设计与评估。
 
-新架构的[IP设计文档](docs/design/new_architecture/IP_DESIGN.md)已于2026-11-14通过用户整体审核，作为Verilog实现与功能验证的设计基线。已确认约束与设计依据见[设计决策](docs/project/decisions.md)。独立输入转换器已完成RTL实现和本机仿真，MAC核心设计边界为ACC完整状态交接。实现与验证进度见[项目状态](docs/project/status.md)。
+新架构的[IP设计文档](docs/design/new_architecture/IP_DESIGN.md)已于2026-11-14通过用户整体审核，作为Verilog实现与功能验证的设计基线。已确认约束与设计依据见[设计决策](docs/project/decisions.md)。独立输入转换器和 MAC 核心已完成 Verilog-2001 RTL 与本机共仿，完整核心在 E11 写回 ACC 状态并通过完成槽交接。实现与验证进度见[项目状态](docs/project/status.md)。
 
 现有 SystemVerilog 基线是旧 dot16/Q2.34 实现，覆盖 FP16、BF16、两种 FP8 及其交叉相乘、INT16/8/4、MXFP8 和 MXINT8 的已定义输入域，保留作旧基线功能参考。`hardware/rtl/verilog/` 根层四个文件是旧基线的未完成改写。新架构源文件位于 `hardware/rtl/verilog/new_arch/`。
 
@@ -11,7 +11,7 @@
 1. 阅读[新架构IP设计](docs/design/new_architecture/IP_DESIGN.md)与[设计决策](docs/project/decisions.md)，了解已审核的数值、接口、资源和周期合同。
 2. 阅读[项目状态](docs/project/status.md)，区分新架构设计与模型证据、旧基线实现，以及尚未执行的验证。
 3. 阅读[旧基线架构设计](docs/design/IP_Design.md)与[旧基线 RTL 实现说明](docs/design/RTL_Design.md)；两份文档描述 SystemVerilog 基线，不构成新架构合同。
-4. 查看[硬件验证说明](hardware/verification/README.md)、[数值实验指南](docs/experiments/README.md)，按其中的旧基线和模型语义使用证据。
+4. 查看[硬件验证说明](hardware/verification/README.md)和[数值实验指南](docs/experiments/README.md)，了解各实现的回归入口与模型证据。
 5. 查看[论文材料](thesis/README.md)；后续架构调整和任务安排由用户确定。
 
 Agent 开始工作前阅读[工作指令](AGENTS.md)。已确认决策写入[decisions.md](docs/project/decisions.md)，变更历史使用 Git 记录，不另建变更或任务台账。
@@ -53,7 +53,7 @@ python3 -m venv .venv
 # 只做快速的完整性和链接检查
 .venv/bin/python scripts/check_project.py --checks integrity links
 
-# 全部测试（含阶段 1 之前的 570 项及 9 项独立转换器共仿测试）
+# 全部测试（含新架构转换器、前向链和 MAC 核心共仿）
 .venv/bin/python -m pytest -q
 
 # 运行已交付的 TXT 向量
@@ -72,4 +72,4 @@ python3 -m venv .venv
 
 旧基线在 2026-10-31 目录重组后的回归：硬件验证 134 项、实验框架 308 项，合计 **442 项通过**；完整 TXT 向量的连续输入、停顿和四类负例检查通过。具体记录见[项目状态](docs/project/status.md)。
 
-旧基线目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与旧基线 Q2.34 硬件语义不同。新架构已穷举验证独立转换器的 8 种格式及全部 16-bit raw 字，MAC 核心 RTL、周期共仿与物理评估仍待实施。
+旧基线目前还没有生产顶层、最终 FP32 转换器、结果端 ready，以及本轮综合/PPA 证据。部分历史正式实验原始数据缺失；早期实验模型与旧基线 Q2.34 硬件语义不同。新架构已穷举验证转换器的 8 种格式及全部 16-bit raw 字，并逐位、逐拍共仿核心 E0→E11 写回与结果交接。新架构的 GLS、综合、STA 和 PPA 仍待实施。
