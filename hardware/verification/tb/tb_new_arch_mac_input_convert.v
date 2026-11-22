@@ -9,7 +9,7 @@ module tb_new_arch_mac_input_convert;
     wire [21:0] fields;
     wire out_valid;
 
-    new_arch_mac_input_convert dut (
+    mac_input_convert dut (
         .clk(clk), .rst_n(rst_n), .i_raw(raw), .i_fmt(fmt), .i_valid(valid),
         .o_fields(fields), .o_valid(out_valid)
     );

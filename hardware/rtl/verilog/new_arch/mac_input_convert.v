@@ -1,4 +1,4 @@
-module new_arch_mac_input_convert (
+module mac_input_convert (
     input  wire        clk,
     input  wire        rst_n,
     input  wire [15:0] i_raw,

@@ -4,10 +4,10 @@
 
 - `systemverilog.f`：15 个已验证生产源文件，类型包先编译。
 - `verilog.f`：旧基线的 4 个未完成改写文件。
-- [`new_arch_convert.f`](new_arch_convert.f) 包含独立输入转换器生产源码，使用 `iverilog -g2001` 编译。共仿入口见[硬件验证说明](../verification/README.md#新架构独立输入转换器)。
-- [`new_arch_mac.f`](new_arch_mac.f) 包含完整 MAC 核心，使用 `iverilog -g2001` 编译。`new_arch_mac_core` 是完整顶层，`new_arch_mac_forward` 可作为前向子模块单独编译。执行方法见[核心共仿](../verification/README.md#新架构-mac-核心与-acc)。
+- [`new_arch_convert.f`](new_arch_convert.f) 包含独立输入转换器生产源码，顶层为 `mac_input_convert`，使用 `iverilog -g2001` 编译。共仿入口见[硬件验证说明](../verification/README.md#新架构独立输入转换器)。
+- [`new_arch_mac.f`](new_arch_mac.f) 包含完整 MAC 核心，使用 `iverilog -g2001` 编译。`mac_core` 是完整顶层，`mac_forward` 可作为前向子模块单独编译。执行方法见[核心共仿](../verification/README.md#新架构-mac-核心与-acc)。
 
-各清单独立编译。旧 SystemVerilog 基线的 [DesignWare 仿真替身](../verification/legacy_sv/tb/dwbb_sim_models.sv)按测试需要单独加入。真实综合使用对应厂商库。
+新架构的每个生产 `.v` 文件声明一个同名模块。综合 MAC 核心时选择 `mac_core` 与 `new_arch_mac.f`，综合独立转换器时选择 `mac_input_convert` 与 `new_arch_convert.f`。新旧基线均有 `mac_mul_frontend`，各清单独立编译。旧 SystemVerilog 基线的 [DesignWare 仿真替身](../verification/legacy_sv/tb/dwbb_sim_models.sv)按测试需要单独加入。真实综合使用对应厂商库。
 
 例如，编译并运行类型包测试：
 

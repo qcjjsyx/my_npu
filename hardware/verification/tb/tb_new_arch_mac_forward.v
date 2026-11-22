@@ -12,7 +12,7 @@ module tb_new_arch_mac_forward;
     wire signed [40:0] m0, m1;
     wire signed [9:0] h0, h1;
     wire signed [44:0] int0, int1;
-    new_arch_mac_forward dut (
+    mac_forward dut (
         .clk(clk), .rst_n(rst_n), .i_a_fields(a), .i_b_fields(b),
         .i_mode(mode), .i_mx(mx), .i_scale_a(scale_a), .i_scale_b(scale_b),
         .i_ctx(meta[3:2]), .i_first(meta[1]), .i_last(meta[0]), .i_valid(valid),
@@ -173,7 +173,7 @@ module tb_new_arch_mac_mx_lane;
     wire signed [40:0] got_m;
     wire signed [9:0] got_h;
     wire signed [44:0] got_i;
-    new_arch_mac_mx_lane dut (
+    mac_mx_lane dut (
         .i_float(use_float), .i_n(n), .i_e(e), .i_h(h),
         .o_m(got_m), .o_h(got_h), .o_i(got_i)
     );

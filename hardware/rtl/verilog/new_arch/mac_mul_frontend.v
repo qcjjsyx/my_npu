@@ -1,5 +1,5 @@
 // Assemble a parameterized array of clusters and register the R_PROD slots.
-module new_arch_mac_mul_frontend #(
+module mac_mul_frontend #(
     parameter integer CLUSTER_COUNT = 8
 ) (
     input  wire                          clk,
@@ -27,7 +27,7 @@ module new_arch_mac_mul_frontend #(
 
     genvar j;
     generate for (j = 0; j < CLUSTER_COUNT; j = j + 1) begin : cluster
-        new_arch_mac_mul_cluster u_cluster (
+        mac_mul_cluster u_cluster (
             .clk(clk), .rst_n(rst_n), .i_en_mul(i_en_mul),
             .i_mode_mul(i_mode_mul), .i_mode_prod(i_mode_prod),
             .i_a(i_a[j*44 +: 44]), .i_b(i_b[j*44 +: 44]),

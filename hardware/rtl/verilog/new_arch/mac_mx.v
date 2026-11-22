@@ -1,4 +1,4 @@
-module new_arch_mac_mx (
+module mac_mx (
     input  wire clk,
     input  wire rst_n,
     input  wire i_en,
@@ -21,11 +21,11 @@ module new_arch_mac_mx (
     wire signed [40:0] m_a, m_b;
     wire signed [9:0] h_a, h_b;
     wire signed [44:0] int_a, int_b;
-    new_arch_mac_mx_lane lane_a (
+    mac_mx_lane lane_a (
         .i_float(is_float), .i_n(i_n_a), .i_e(i_e_a), .i_h(i_h_a),
         .o_m(m_a), .o_h(h_a), .o_i(int_a)
     );
-    new_arch_mac_mx_lane lane_b (
+    mac_mx_lane lane_b (
         .i_float(is_float), .i_n(i_n_b), .i_e(i_e_b), .i_h(i_h_b),
         .o_m(m_b), .o_h(h_b), .o_i(int_b)
     );

@@ -1,4 +1,4 @@
-module new_arch_mac_core (
+module mac_core (
     input  wire clk,
     input  wire rst_n,
     input  wire [351:0] i_a_fields,
@@ -37,7 +37,7 @@ module new_arch_mac_core (
     wire signed [40:0] m_v0, m_v1;
     wire signed [9:0] h_v0, h_v1;
     wire signed [44:0] i_v0, i_v1;
-    new_arch_mac_forward forward (
+    mac_forward forward (
         .clk(clk), .rst_n(rst_n), .i_a_fields(i_a_fields), .i_b_fields(i_b_fields),
         .i_mode(i_mode), .i_mx(i_mx), .i_scale_a(i_scale_a), .i_scale_b(i_scale_b),
         .i_ctx(i_ctx), .i_first(i_first), .i_last(i_last), .i_valid(i_valid),
@@ -69,14 +69,14 @@ module new_arch_mac_core (
     wire en1_s2 = en_s2 && two_groups(acc_meta_s1[7:5]);
     wire en1_s3 = en_s3 && two_groups(acc_meta_s2[7:5]);
     wire [50:0] read_state0, read_state1;
-    new_arch_mac_acc_lane acc0 (
+    mac_acc_lane acc0 (
         .clk(clk), .rst_n(rst_n), .i_en_s1(en_s1), .i_en_s2(en_s2), .i_en_s3(en_s3),
         .i_ctx_s1(mx_meta[3:2]), .i_first_s1(mx_meta[1]), .i_float_s1(float_s1),
         .i_m(m_v0), .i_h(h_v0), .i_int(i_v0),
         .i_ctx_s3(acc_meta_s2[3:2]), .i_float_s3(float_s3),
         .i_result_ctx(i_result_ctx), .o_result_state(read_state0)
     );
-    new_arch_mac_acc_lane acc1 (
+    mac_acc_lane acc1 (
         .clk(clk), .rst_n(rst_n), .i_en_s1(en1_s1), .i_en_s2(en1_s2), .i_en_s3(en1_s3),
         .i_ctx_s1(mx_meta[3:2]), .i_first_s1(mx_meta[1]), .i_float_s1(float_s1),
         .i_m(m_v1), .i_h(h_v1), .i_int(i_v1),
@@ -85,7 +85,7 @@ module new_arch_mac_core (
     );
 
     assign o_pipe_empty = forward_empty && acc_valid == 2'b00;
-    new_arch_mac_ctx_control contexts (
+    mac_ctx_control contexts (
         .clk(clk), .rst_n(rst_n), .i_mode(i_mode), .i_mx(i_mx), .i_ctx(i_ctx),
         .i_first(i_first), .i_last(i_last), .i_valid(i_valid), .i_pipe_empty(o_pipe_empty),
         .i_write_last(en_s3 && acc_meta_s2[0]), .i_write_ctx(acc_meta_s2[3:2]),

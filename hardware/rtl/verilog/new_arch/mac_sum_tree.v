@@ -1,4 +1,4 @@
-module new_arch_mac_sum_tree (
+module mac_sum_tree (
     input  wire         clk,
     input  wire         rst_n,
     input  wire         i_en_lo,

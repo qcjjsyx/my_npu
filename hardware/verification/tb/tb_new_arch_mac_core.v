@@ -13,7 +13,7 @@ module tb_new_arch_mac_core;
     wire [2:0] free, done, result_mode;
     wire empty, result_valid, result_mx;
     wire [50:0] state0, state1;
-    new_arch_mac_core dut (
+    mac_core dut (
         .clk(clk), .rst_n(rst_n), .i_a_fields(a), .i_b_fields(b),
         .i_mode(mode), .i_mx(mx), .i_scale_a(scale_a), .i_scale_b(scale_b),
         .i_ctx(ctx), .i_first(first), .i_last(last), .i_valid(valid),
@@ -267,12 +267,12 @@ module tb_new_arch_mac_acc_arithmetic;
     wire tail, bypass;
     wire [50:0] bypass_state, state;
     wire signed [44:0] t = inject_minus_one ? -45'sd1 : a + b;
-    new_arch_mac_acc_align align (
+    mac_acc_align align (
         .i_float(use_float), .i_old(old_state), .i_m(m), .i_h(h), .i_int(iv),
         .o_a(a), .o_b(b), .o_h(h_a), .o_tail(tail),
         .o_bypass(bypass), .o_bypass_state(bypass_state)
     );
-    new_arch_mac_acc_round normalize (
+    mac_acc_round normalize (
         .i_float(use_float), .i_t(t), .i_h(h_a), .i_tail(tail),
         .i_bypass(bypass), .i_bypass_state(bypass_state), .o_state(state)
     );

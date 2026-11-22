@@ -1,6 +1,6 @@
 // Two physical lanes share the wide-element broadcast and product reconstruction.
 // The cluster registers R_MUL and presents products to the frontend's R_PROD.
-module new_arch_mac_mul_cluster (
+module mac_mul_cluster (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        i_en_mul,
@@ -49,7 +49,7 @@ module new_arch_mac_mul_cluster (
         wire signed [17:0] w0, w1;
         wire signed [9:0] s0, s1;
         wire [8:0] t;
-        new_arch_mac_mul_lane #(.ODD(j)) mul_lane (
+        mac_mul_lane #(.ODD(j)) mul_lane (
             .i_mode(i_mode_mul), .i_a(a), .i_b(b),
             .o_w0(w0), .o_w1(w1), .o_s0(s0), .o_s1(s1), .o_t(t)
         );

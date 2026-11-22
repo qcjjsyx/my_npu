@@ -113,7 +113,7 @@ raw的低位先放g0：FP4和INT4依次为bits[3:0]=g0p0、[7:4]=g0p1、[11:8]=g
 
 每个物理前端配置 2 颗 signed9×signed9（W0/W1）和 2 颗 signed5×signed5（S0/S1）。16 前端共 32 颗宽块、32 颗小块。
 
-RTL 中，每个 `new_arch_mac_mul_cluster` 由偶、奇两个 `new_arch_mac_mul_lane` 组成。簇内负责偶槽广播、R_MUL 寄存及 FP16/INT16 部分积重构。`new_arch_mac_mul_frontend` 按正整数参数 `CLUSTER_COUNT` 例化乘法簇，端口位宽随簇数变化。它在 R_PROD 将每簇的宽乘积依次写入低位槽，其他模式按物理 lane 编号写入。MAC 实例固定使用 8 个簇，对应本文的 16 个物理前端。
+RTL 中，每个 `mac_mul_cluster` 由偶、奇两个 `mac_mul_lane` 组成。簇内负责偶槽广播、R_MUL 寄存及 FP16/INT16 部分积重构。`mac_mul_frontend` 按正整数参数 `CLUSTER_COUNT` 例化乘法簇，端口位宽随簇数变化。它在 R_PROD 将每簇的宽乘积依次写入低位槽，其他模式按物理 lane 编号写入。MAC 实例固定使用 8 个簇，对应本文的 16 个物理前端。
 
 | 模式 | W0 | W1 | S0 | S1 | 完整乘积/前端（对） | K/G |
 |---|---|---|---|---|---|---:|

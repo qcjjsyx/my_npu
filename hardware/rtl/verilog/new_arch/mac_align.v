@@ -1,5 +1,5 @@
 // R_MAX and R_ALIGN. R_ALIGN stores the two routed vectors of tree leaves.
-module new_arch_mac_align (
+module mac_align (
     input  wire         clk,
     input  wire         rst_n,
     input  wire         i_en_max,
@@ -26,10 +26,10 @@ module new_arch_mac_align (
     wire any_a, any_b;
     wire [6:0] max_a;
     wire [3:0] max_b;
-    new_arch_mac_max_tree #(.Q_WIDTH(7)) max_tree_a (
+    mac_max_tree #(.Q_WIDTH(7)) max_tree_a (
         .i_q(i_q0), .i_nz(nz_a), .o_max(max_a), .o_nz(any_a)
     );
-    new_arch_mac_max_tree #(.Q_WIDTH(4)) max_tree_b (
+    mac_max_tree #(.Q_WIDTH(4)) max_tree_b (
         .i_q(q_b_narrow), .i_nz(nz_b), .o_max(max_b), .o_nz(any_b)
     );
 

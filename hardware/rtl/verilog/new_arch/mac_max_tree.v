@@ -1,4 +1,4 @@
-module new_arch_mac_max_tree #(
+module mac_max_tree #(
     parameter Q_WIDTH = 7
 ) (
     input  wire [16*Q_WIDTH-1:0] i_q,

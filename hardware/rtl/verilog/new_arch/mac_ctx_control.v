@@ -1,4 +1,4 @@
-module new_arch_mac_ctx_control (
+module mac_ctx_control (
     input  wire clk,
     input  wire rst_n,
     input  wire [2:0] i_mode,

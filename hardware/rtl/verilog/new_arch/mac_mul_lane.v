@@ -1,5 +1,5 @@
 // The mode muxes precede the four shared multiplier blocks and exponent adder.
-module new_arch_mac_mul_lane #(
+module mac_mul_lane #(
     parameter ODD = 0
 ) (
     input  wire [2:0] i_mode,

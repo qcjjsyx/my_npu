@@ -1,5 +1,5 @@
 // R_TREE_LO, R_TREE_HI and R_SUM.
-module new_arch_mac_reduce (
+module mac_reduce (
     input  wire         clk,
     input  wire         rst_n,
     input  wire         i_en_lo,
@@ -21,11 +21,11 @@ module new_arch_mac_reduce (
 );
     localparam [2:0] FP4 = 3'd0, FP8 = 3'd1, FP16 = 3'd3, INT4 = 3'd4, INT8 = 3'd5;
     wire signed [35:0] sum_a, sum_b;
-    new_arch_mac_sum_tree tree_a (
+    mac_sum_tree tree_a (
         .clk(clk), .rst_n(rst_n), .i_en_lo(i_en_lo), .i_en_hi(i_en_hi),
         .i_leaves(i_tree_a), .o_sum(sum_a)
     );
-    new_arch_mac_sum_tree tree_b (
+    mac_sum_tree tree_b (
         .clk(clk), .rst_n(rst_n), .i_en_lo(i_en_lo), .i_en_hi(i_en_hi),
         .i_leaves(i_tree_b), .o_sum(sum_b)
     );

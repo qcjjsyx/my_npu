@@ -1,4 +1,4 @@
-module new_arch_mac_mx_lane (
+module mac_mx_lane (
     input  wire i_float,
     input  wire signed [40:0] i_n,
     input  wire signed [9:0] i_e,

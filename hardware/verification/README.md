@@ -14,7 +14,7 @@
 
 ## 新架构 MAC 前向链
 
-[`new_arch_mac_forward`](../rtl/verilog/new_arch/mac_forward.v) 在 E0 接收两侧各 16 个 22-bit 字段，在 E8 产生两组 `M_v[40:0]`、`H_v[9:0]`、`I_v[44:0]`。共用 `o_meta[7:0]={mode,mx,ctx,first,last}` 与 `o_valid`。`o_pipe_empty` 反映该子模块 E0 至 E8 的九个 valid。`rst_n` 拉低时异步清零流水寄存器。
+[`mac_forward`](../rtl/verilog/new_arch/mac_forward.v) 在 E0 接收两侧各 16 个 22-bit 字段，在 E8 产生两组 `M_v[40:0]`、`H_v[9:0]`、`I_v[44:0]`。共用 `o_meta[7:0]={mode,mx,ctx,first,last}` 与 `o_valid`。`o_pipe_empty` 反映该子模块 E0 至 E8 的九个 valid。`rst_n` 拉低时异步清零流水寄存器。
 
 从项目根目录运行共仿。
 
@@ -28,7 +28,7 @@
 
 ## 新架构 MAC 核心与 ACC
 
-[`new_arch_mac_core`](../rtl/verilog/new_arch/mac_core.v) 使用 [`new_arch_mac.f`](../filelists/new_arch_mac.f) 编译，顶层端口见 [IP 设计第 1.3 节](../../docs/design/new_architecture/IP_DESIGN.md#13-顶层端口与输入约束)。E9 采样对阶结果，E10 采样 45-bit 加法结果，E11 直接更新两路的状态槽。同一 ctx 按 `D=3` 供数时，下一次对阶读取上一笔刚写回的状态。结果从 DONE 槽按编号读取，两个状态各 51 位。
+[`mac_core`](../rtl/verilog/new_arch/mac_core.v) 使用 [`new_arch_mac.f`](../filelists/new_arch_mac.f) 编译，顶层端口见 [IP 设计第 1.3 节](../../docs/design/new_architecture/IP_DESIGN.md#13-顶层端口与输入约束)。E9 采样对阶结果，E10 采样 45-bit 加法结果，E11 直接更新两路的状态槽。同一 ctx 按 `D=3` 供数时，下一次对阶读取上一笔刚写回的状态。结果从 DONE 槽按编号读取，两个状态各 51 位。
 
 ```sh
 .venv/bin/python -m pytest -q hardware/verification/tests/test_new_arch_mac_core.py
