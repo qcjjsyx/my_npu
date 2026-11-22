@@ -143,8 +143,27 @@ module tb_new_arch_mac_core;
             end
 
             if (!rst_n) begin
+                if ((|{batch, dut.acc_valid, dut.acc_meta_s1, dut.acc_meta_s2,
+                       dut.acc0.r_a, dut.acc0.r_b, dut.acc0.r_t,
+                       dut.acc0.r_h_s1, dut.acc0.r_h_s2, dut.acc0.r_tail_s1, dut.acc0.r_tail_s2,
+                       dut.acc0.r_bypass_s1, dut.acc0.r_bypass_s2,
+                       dut.acc0.r_bypass_state_s1, dut.acc0.r_bypass_state_s2,
+                       dut.acc1.r_a, dut.acc1.r_b, dut.acc1.r_t,
+                       dut.acc1.r_h_s1, dut.acc1.r_h_s2, dut.acc1.r_tail_s1, dut.acc1.r_tail_s2,
+                       dut.acc1.r_bypass_s1, dut.acc1.r_bypass_s2,
+                       dut.acc1.r_bypass_state_s1, dut.acc1.r_bypass_state_s2}) !== 1'b0 ||
+                    free !== 3'b111 || done !== 3'd0 || empty !== 1'b1) begin
+                    $display("FAIL core registers not cleared before clock edge");
+                    $finish;
+                end
                 closed = 3'b000;
-                for (j = 0; j < 3; j = j+1) last_input[j] = -1;
+                for (j = 0; j < 3; j = j+1) begin
+                    last_input[j] = -1;
+                    if ({dut.acc0.r_state[j], dut.acc1.r_state[j]} !== 102'd0) begin
+                        $display("FAIL ACC state not cleared before clock edge, ctx=%0d", j);
+                        $finish;
+                    end
+                end
             end else begin
                 if (result_valid && ready) closed[result_ctx] = 1'b0;
                 if (valid) begin

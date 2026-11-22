@@ -51,14 +51,16 @@ module new_arch_mac_core (
     wire en_s1 = rst_n && mx_valid;
     wire en_s2 = rst_n && acc_valid[0];
     wire en_s3 = rst_n && acc_valid[1];
-    always @(posedge clk) begin
-        if (!rst_n)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             acc_valid <= 2'b00;
-        else
+            acc_meta_s1 <= 8'd0;
+            acc_meta_s2 <= 8'd0;
+        end else begin
             acc_valid <= {acc_valid[0], mx_valid};
-
-        if (en_s1) acc_meta_s1 <= mx_meta;
-        if (en_s2) acc_meta_s2 <= acc_meta_s1;
+            if (en_s1) acc_meta_s1 <= mx_meta;
+            if (en_s2) acc_meta_s2 <= acc_meta_s1;
+        end
     end
 
     wire float_s1 = !mx_meta[7] || mx_meta[4];
@@ -68,14 +70,14 @@ module new_arch_mac_core (
     wire en1_s3 = en_s3 && two_groups(acc_meta_s2[7:5]);
     wire [50:0] read_state0, read_state1;
     new_arch_mac_acc_lane acc0 (
-        .clk(clk), .i_en_s1(en_s1), .i_en_s2(en_s2), .i_en_s3(en_s3),
+        .clk(clk), .rst_n(rst_n), .i_en_s1(en_s1), .i_en_s2(en_s2), .i_en_s3(en_s3),
         .i_ctx_s1(mx_meta[3:2]), .i_first_s1(mx_meta[1]), .i_float_s1(float_s1),
         .i_m(m_v0), .i_h(h_v0), .i_int(i_v0),
         .i_ctx_s3(acc_meta_s2[3:2]), .i_float_s3(float_s3),
         .i_result_ctx(i_result_ctx), .o_result_state(read_state0)
     );
     new_arch_mac_acc_lane acc1 (
-        .clk(clk), .i_en_s1(en1_s1), .i_en_s2(en1_s2), .i_en_s3(en1_s3),
+        .clk(clk), .rst_n(rst_n), .i_en_s1(en1_s1), .i_en_s2(en1_s2), .i_en_s3(en1_s3),
         .i_ctx_s1(mx_meta[3:2]), .i_first_s1(mx_meta[1]), .i_float_s1(float_s1),
         .i_m(m_v1), .i_h(h_v1), .i_int(i_v1),
         .i_ctx_s3(acc_meta_s2[3:2]), .i_float_s3(float_s3),

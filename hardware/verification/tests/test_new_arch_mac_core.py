@@ -104,6 +104,8 @@ def check_core(image, tmp_path, frames):
     expected = []
     commits = []
     for cycle, frame in enumerate(frames):
+        if not frame.rst_n:
+            model.reset()
         if cycle:
             expected.append(("B", cycle, model.outputs(frame.selected)))
         writeback = model.step(frame.txn, frame.selected, frame.ready, frame.rst_n)
@@ -190,18 +192,18 @@ def test_core_release_accept_and_commit_in_same_cycle(images, tmp_path):
     assert commits[2].states == commits[4].states
 
 
-@pytest.mark.parametrize("mode", (Mode.FP16, Mode.BF16))
-def test_core_reset_cancels_work_and_isolates_unwritten_state(images, tmp_path, mode):
-    word = 0x6FFF if mode == Mode.FP16 else 0x7F7F
+@pytest.mark.parametrize("mode,word", [(Mode.FP16, 0x6FFF), (Mode.BF16, 0x7F7F), (Mode.INT8, 0x027F)])
+def test_core_reset_clears_slots_and_cancels_work(images, tmp_path, mode, word):
+    x_unused = mode in (Mode.FP16, Mode.BF16)
     first = constant_input(MacInput(mode, 0), word, word)
     aborted = replace(first, ctx=1, last=False)
-    frames = [Frame(first, x_unused=True), Frame(), Frame(aborted, x_unused=True),
+    frames = [Frame(first, x_unused=x_unused), Frame(), Frame(aborted, x_unused=x_unused),
               *([Frame(selected=0)] * 10)]
     # The pending ctx1 write, ready for ctx0, and a new input coincide with reset.
-    frames += [Frame(replace(first, ctx=2), selected=0, ready=True, rst_n=False, x_unused=True)]
+    frames += [Frame(replace(first, ctx=2), selected=0, ready=True, rst_n=False, x_unused=x_unused)]
     next_value = constant_input(MacInput(mode, 0, last=False), word ^ 0x8000, word)
-    frames += [Frame(next_value, x_unused=True), Frame(), Frame(),
-               Frame(replace(next_value, first=False, last=True), x_unused=True),
+    frames += [Frame(next_value, x_unused=x_unused), Frame(), Frame(),
+               Frame(replace(next_value, first=False, last=True), x_unused=x_unused),
                *([Frame(selected=0)] * 13), Frame(selected=0, ready=True)]
     commits = check_core(images["core"], tmp_path, frames)
     assert [writeback.txn.ctx for writeback in commits] == [0, 0, 0]

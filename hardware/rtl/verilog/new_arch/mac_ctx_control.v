@@ -30,7 +30,7 @@ module new_arch_mac_ctx_control (
         assign o_ctx_done[j] = r_lifecycle[j] == DONE;
 
         // Legal traffic has at most one lifecycle-changing event per slot.
-        always @(posedge clk) begin
+        always @(posedge clk or negedge rst_n) begin
             if (!rst_n)
                 r_lifecycle[j] <= FREE;
             else if (i_write_last && i_write_ctx == CTX)
@@ -46,7 +46,7 @@ module new_arch_mac_ctx_control (
         end
     end endgenerate
 
-    always @(posedge clk) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             batch_mode <= 3'd0;
             batch_mx <= 1'b0;

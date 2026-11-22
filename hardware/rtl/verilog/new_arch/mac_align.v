@@ -1,6 +1,7 @@
 // R_MAX and R_ALIGN. R_ALIGN stores the two routed vectors of tree leaves.
 module new_arch_mac_align (
     input  wire         clk,
+    input  wire         rst_n,
     input  wire         i_en_max,
     input  wire         i_en_align,
     input  wire [2:0]   i_mode_max,
@@ -39,8 +40,19 @@ module new_arch_mac_align (
     reg [6:0] r_max_a, r_max_b;
     reg r_any_a, r_any_b;
 
-    always @(posedge clk) begin
-        if (i_en_max) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_p0 <= 512'd0;
+            r_p1 <= 144'd0;
+            r_p2 <= 256'd0;
+            r_p3 <= 144'd0;
+            r_q0 <= 112'd0;
+            r_q1 <= 112'd0;
+            r_max_a <= 7'd0;
+            r_max_b <= 7'd0;
+            r_any_a <= 1'b0;
+            r_any_b <= 1'b0;
+        end else if (i_en_max) begin
             r_p0 <= i_p0;
             r_p1 <= i_p1;
             r_p2 <= i_p2;
@@ -124,8 +136,11 @@ module new_arch_mac_align (
             endcase
         end
 
-        always @(posedge clk) begin
-            if (i_en_align) begin
+        always @(posedge clk or negedge rst_n) begin
+            if (!rst_n) begin
+                o_tree_a[j*32 +: 32] <= 32'd0;
+                o_tree_b[j*32 +: 32] <= 32'd0;
+            end else if (i_en_align) begin
                 o_tree_a[j*32 +: 32] <= tree_a;
                 o_tree_b[j*32 +: 32] <= tree_b;
             end
@@ -148,38 +163,13 @@ module new_arch_mac_align (
         endcase
     end
 
-    always @(posedge clk) begin
-        if (i_en_align) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            o_e_a <= 10'd0;
+            o_e_b <= 10'd0;
+        end else if (i_en_align) begin
             o_e_a <= e_a;
             o_e_b <= e_b;
         end
     end
-endmodule
-
-module new_arch_mac_max_tree #(
-    parameter Q_WIDTH = 7
-) (
-    input  wire [16*Q_WIDTH-1:0] i_q,
-    input  wire [15:0]           i_nz,
-    output wire [Q_WIDTH-1:0]    o_max,
-    output wire                  o_nz
-);
-    // Heap order: 15 internal nodes, then 16 leaves. Compare unsigned Q only
-    // after giving priority to a valid (nonzero product) child.
-    wire [Q_WIDTH:0] tree [0:30];
-    genvar j;
-    generate
-        for (j = 0; j < 16; j = j+1) begin : leaf
-            assign tree[j+15] = i_nz[j]
-                ? {1'b1, i_q[j*Q_WIDTH +: Q_WIDTH]} : {(Q_WIDTH+1){1'b0}};
-        end
-        for (j = 0; j < 15; j = j+1) begin : branch
-            wire [Q_WIDTH:0] left = tree[2*j+1];
-            wire [Q_WIDTH:0] right = tree[2*j+2];
-            wire take_left = left[Q_WIDTH] &&
-                (!right[Q_WIDTH] || left[Q_WIDTH-1:0] >= right[Q_WIDTH-1:0]);
-            assign tree[j] = take_left ? left : right;
-        end
-    endgenerate
-    assign {o_nz, o_max} = tree[0];
 endmodule

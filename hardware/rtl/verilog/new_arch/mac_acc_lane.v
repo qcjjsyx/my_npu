@@ -1,6 +1,7 @@
 // One feedback lane. Shared transaction metadata and valid are held by the core.
 module new_arch_mac_acc_lane (
     input  wire clk,
+    input  wire rst_n,
     input  wire i_en_s1,
     input  wire i_en_s2,
     input  wire i_en_s3,
@@ -51,8 +52,15 @@ module new_arch_mac_acc_lane (
     reg [50:0] r_bypass_state_s1, r_bypass_state_s2;
     wire signed [44:0] add_a = i_en_s2 ? r_a : 45'sd0;
     wire signed [44:0] add_b = i_en_s2 ? r_b : 45'sd0;
-    always @(posedge clk) begin
-        if (i_en_s1) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_a <= 45'd0;
+            r_b <= 45'd0;
+            r_h_s1 <= 10'd0;
+            r_tail_s1 <= 1'b0;
+            r_bypass_s1 <= 1'b0;
+            r_bypass_state_s1 <= 51'd0;
+        end else if (i_en_s1) begin
             r_a <= align_a;
             r_b <= align_b;
             r_h_s1 <= align_h;
@@ -60,7 +68,16 @@ module new_arch_mac_acc_lane (
             r_bypass_s1 <= align_bypass;
             r_bypass_state_s1 <= align_state;
         end
-        if (i_en_s2) begin
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_t <= 45'd0;
+            r_h_s2 <= 10'd0;
+            r_tail_s2 <= 1'b0;
+            r_bypass_s2 <= 1'b0;
+            r_bypass_state_s2 <= 51'd0;
+        end else if (i_en_s2) begin
             r_t <= add_a + add_b;
             r_h_s2 <= r_h_s1;
             r_tail_s2 <= r_tail_s1;
@@ -78,8 +95,12 @@ module new_arch_mac_acc_lane (
     );
 
     // S3's combinational result is captured directly in the selected context.
-    always @(posedge clk) begin
-        if (i_en_s3) r_state[i_ctx_s3] <= next_state;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_state[0] <= 51'd0;
+            r_state[1] <= 51'd0;
+            r_state[2] <= 51'd0;
+        end else if (i_en_s3) r_state[i_ctx_s3] <= next_state;
     end
 
     assign o_result_state = select_state(i_result_ctx, r_state[0], r_state[1], r_state[2]);

@@ -53,6 +53,38 @@ module tb_new_arch_mac_forward;
         end
     endtask
 
+    task check_async_reset;
+        integer stage;
+        begin
+            if ((|{dut.r_valid, dut.r_a, dut.r_b, w0, w1, s0, s1, t,
+                   dut.p0, dut.p1, dut.p2, dut.p3, dut.q0, dut.q1,
+                   dut.align.r_p0, dut.align.r_p1, dut.align.r_p2, dut.align.r_p3,
+                   dut.align.r_q0, dut.align.r_q1,
+                   dut.align.r_max_a, dut.align.r_max_b, dut.align.r_any_a, dut.align.r_any_b,
+                   dut.tree_a, dut.tree_b, dut.align_e_a, dut.align_e_b,
+                   dut.reduce.tree_a.r_lo, dut.reduce.tree_b.r_lo,
+                   dut.reduce.sum_a, dut.reduce.sum_b, dut.reduce.r_e_lo_a, dut.reduce.r_e_lo_b,
+                   dut.reduce.r_e_hi_a, dut.reduce.r_e_hi_b,
+                   dut.n_a, dut.n_b, dut.sum_e_a, dut.sum_e_b, dut.sum_h_a, dut.sum_h_b,
+                   m0, m1, h0, h1, int0, int1}) !== 1'b0 || empty !== 1'b1) begin
+                $display("FAIL forward registers not cleared before clock edge");
+                $finish;
+            end
+            for (stage = 0; stage < 9; stage = stage+1) begin
+                if (dut.r_meta[stage] !== 8'd0) begin
+                    $display("FAIL metadata not cleared at stage %0d", stage);
+                    $finish;
+                end
+            end
+            for (stage = 0; stage < 7; stage = stage+1) begin
+                if ({dut.r_h_a[stage], dut.r_h_b[stage]} !== 18'd0) begin
+                    $display("FAIL scale not cleared at stage %0d", stage);
+                    $finish;
+                end
+            end
+        end
+    endtask
+
     reg [8191:0] vec_path;
     integer fd, columns, cycle;
     reg [8:0] previous_valid;
@@ -71,7 +103,9 @@ module tb_new_arch_mac_forward;
         columns = $fscanf(fd, "%h %h %h %h %h %b %b", rst_n, valid, meta, scale_a, scale_b, a, b);
         while (columns == 7) begin
             #4;
-            if (cycle != 0 && previous_valid !== dut.r_valid) begin
+            if (!rst_n)
+                check_async_reset;
+            else if (cycle != 0 && previous_valid !== dut.r_valid) begin
                 $display("FAIL valid changed before edge at cycle %0d", cycle);
                 $finish;
             end

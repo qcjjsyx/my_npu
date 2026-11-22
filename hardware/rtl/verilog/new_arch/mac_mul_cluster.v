@@ -2,6 +2,7 @@
 // The cluster registers R_MUL and presents products to the frontend's R_PROD.
 module new_arch_mac_mul_cluster (
     input  wire        clk,
+    input  wire        rst_n,
     input  wire        i_en_mul,
     input  wire [2:0]  i_mode_mul,
     input  wire [2:0]  i_mode_prod,
@@ -53,8 +54,14 @@ module new_arch_mac_mul_cluster (
             .o_w0(w0), .o_w1(w1), .o_s0(s0), .o_s1(s1), .o_t(t)
         );
 
-        always @(posedge clk) begin
-            if (i_en_mul) begin
+        always @(posedge clk or negedge rst_n) begin
+            if (!rst_n) begin
+                r_w0[j] <= 18'd0;
+                r_w1[j] <= 18'd0;
+                r_s0[j] <= 10'd0;
+                r_s1[j] <= 10'd0;
+                r_t[j] <= 9'd0;
+            end else if (i_en_mul) begin
                 r_w0[j] <= w0;
                 r_w1[j] <= w1;
                 r_s0[j] <= s0;

@@ -3,6 +3,7 @@ module new_arch_mac_mul_frontend #(
     parameter integer CLUSTER_COUNT = 8
 ) (
     input  wire                          clk,
+    input  wire                          rst_n,
     input  wire                          i_en_mul,
     input  wire                          i_en_prod,
     input  wire [2:0]                    i_mode_mul,
@@ -27,7 +28,7 @@ module new_arch_mac_mul_frontend #(
     genvar j;
     generate for (j = 0; j < CLUSTER_COUNT; j = j + 1) begin : cluster
         new_arch_mac_mul_cluster u_cluster (
-            .clk(clk), .i_en_mul(i_en_mul),
+            .clk(clk), .rst_n(rst_n), .i_en_mul(i_en_mul),
             .i_mode_mul(i_mode_mul), .i_mode_prod(i_mode_prod),
             .i_a(i_a[j*44 +: 44]), .i_b(i_b[j*44 +: 44]),
             .o_p0(lane_p0[j*64 +: 64]), .o_p1(lane_p1[j*18 +: 18]),
@@ -40,8 +41,15 @@ module new_arch_mac_mul_frontend #(
     // Wide elements contribute one product per cluster. Pack them into
     // the low CLUSTER_COUNT product slots before the R_PROD boundary.
     wire paired = (i_mode_prod == FP16 || i_mode_prod == INT16);
-    always @(posedge clk) begin
-        if (i_en_prod) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            o_p0 <= {(64*CLUSTER_COUNT){1'b0}};
+            o_p1 <= {(18*CLUSTER_COUNT){1'b0}};
+            o_p2 <= {(32*CLUSTER_COUNT){1'b0}};
+            o_p3 <= {(18*CLUSTER_COUNT){1'b0}};
+            o_q0 <= {(14*CLUSTER_COUNT){1'b0}};
+            o_q1 <= {(14*CLUSTER_COUNT){1'b0}};
+        end else if (i_en_prod) begin
             o_p0 <= paired ? {{(32*CLUSTER_COUNT){1'b0}}, pair_p0} : lane_p0;
             o_q0 <= paired ? {{(7*CLUSTER_COUNT){1'b0}}, pair_q0} : lane_q0;
             o_p1 <= lane_p1;

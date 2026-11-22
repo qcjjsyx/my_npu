@@ -14,7 +14,7 @@
 
 ## 新架构 MAC 前向链
 
-[`new_arch_mac_forward`](../rtl/verilog/new_arch/mac_forward.v) 在 E0 接收两侧各 16 个 22-bit 字段，在 E8 产生两组 `M_v[40:0]`、`H_v[9:0]`、`I_v[44:0]`。共用 `o_meta[7:0]={mode,mx,ctx,first,last}` 与 `o_valid`。`o_pipe_empty` 反映该子模块 E0 至 E8 的九个 valid。复位按 MAC 核心合同同步清 valid。
+[`new_arch_mac_forward`](../rtl/verilog/new_arch/mac_forward.v) 在 E0 接收两侧各 16 个 22-bit 字段，在 E8 产生两组 `M_v[40:0]`、`H_v[9:0]`、`I_v[44:0]`。共用 `o_meta[7:0]={mode,mx,ctx,first,last}` 与 `o_valid`。`o_pipe_empty` 反映该子模块 E0 至 E8 的九个 valid。`rst_n` 拉低时异步清零流水寄存器。
 
 从项目根目录运行共仿。
 
@@ -24,7 +24,7 @@
 
 共仿通过 [Verilog-2001 清单](../filelists/new_arch_mac.f) 编译。[Python 参考](reference/new_arch/forward.py)从 22-bit 字段直接计算完整整数乘积、非零 MAX、逐项 floor、直接求和与精确规格化。[testbench](tb/tb_new_arch_mac_forward.v)逐拍检查 E0 至 E8 的 valid、元数据和各级有效载荷，并独立驱动 MX 算术单元。
 
-29 项测试覆盖 10 种合法 `mode/mx` 组合、FP8 四种格式组合、宽乘积部分积、BF16 最大指数和、未用输入位及奇槽扰动、32/38-bit 对阶边界、FP16 limb 进位、FP4/INT4 packing 极值与相消、MX 两组 scale 端点及同块两份 dot16。时序用例检查同步复位清空在途 valid、气泡、连续输入和 X 态隔离。非法模式、MX 组合、scale 和整数最小负码由 testbench 断言。混合模式相邻输入用于前向子模块的元数据压力测试，完整核心共仿另行检查批次约束。
+29 项测试覆盖 10 种合法 `mode/mx` 组合、FP8 四种格式组合、宽乘积部分积、BF16 最大指数和、未用输入位及奇槽扰动、32/38-bit 对阶边界、FP16 limb 进位、FP4/INT4 packing 极值与相消、MX 两组 scale 端点及同块两份 dot16。testbench 在时钟上升沿前检查异步复位已清零 E0 至 E8 的 valid、元数据及流水数据，并测试气泡、连续输入和 X 态隔离。非法模式、MX 组合、scale 和整数最小负码由 testbench 断言。混合模式相邻输入用于前向子模块的元数据压力测试，完整核心共仿另行检查批次约束。
 
 ## 新架构 MAC 核心与 ACC
 
@@ -34,11 +34,11 @@
 .venv/bin/python -m pytest -q hardware/verification/tests/test_new_arch_mac_core.py
 ```
 
-40 项测试包括以下范围。
+41 项测试包括以下范围。
 
 - ACC 算术模块用 4,543 组有效向量对照 [补码工作位模型](reference/new_arch/acc_fixed.py)和[精确整数 RNE40](reference/new_arch/oracle.py)。覆盖正负平局及奇偶、超宽移位、深度抵消、`d=3/σ=1`、`T=-2`、正负重规格化、整数端点及合法整数 `T=-1`。浮点非旁路 `T=-1` 由独立断言拒绝。
 - [周期参考](reference/new_arch/mac_core.py)从字段直接求局部贡献并用精确整数累计或加后 RNE40。[testbench](tb/tb_new_arch_mac_core.v)对照每次 E11 写回及上升沿前后的结果、位图、排空和流水元数据。10 种合法 `mode/mx` 组合均覆盖三槽交错和 16,384 项定向长点积。
-- 控制验证覆盖零贡献 last、等待与按编号释放、不同槽的同拍读写与接收、释放后下一拍复用、批次切换和同步复位取消在途事务。断言同时检查 DONE 槽无在途记录、G=1 的 ACC1 输入隔离和状态保留，以及非法 ctx、提前重访和非法生命周期操作。
+- 控制验证覆盖零贡献 last、等待与按编号释放、不同槽的同拍读写与接收、释放后下一拍复用、批次切换和异步复位取消在途事务。在时钟上升沿前检查 ACC 流水、双路状态槽和上下文控制已清零，并验证复位释放后可重启。断言同时检查 DONE 槽无在途记录、G=1 的 ACC1 输入隔离和状态保留，以及非法 ctx、提前重访和非法生命周期操作。
 
 ## 旧 SystemVerilog 基线
 

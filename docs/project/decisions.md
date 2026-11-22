@@ -560,7 +560,7 @@ valid                        两组共用有效位；G由mode推导
 - 两棵16输入非零MAX树。A组按unsigned7比较以覆盖BF16 postfold。B组只处理FP8 g1，粗指数和为0…14，树内取Q_i[3:0]按unsigned4比较，Q*_B零扩展为unsigned7后写入R_MAX。对阶器共8条38-bit与24条32-bit，前8条宽路复用FP8/BF16的32-bit符号扩展数据及FP16，余下对应窄路。距离9位，超宽右移符号填充，不统一清零。
 - 两棵32→36-bit平衡归约树各在第2层后寄存34-bit部分和、第4层后寄存36-bit和，最终41-bit重构后寄存。FP16低和unsigned22零扩展、高和signed22符号扩展后移19位。FP4/INT4 packing合同不变。
 - 核心物理顺序为R_IN→R_MUL→R_PROD→R_MAX→R_ALIGN→R_TREE_LO→R_TREE_HI→R_SUM→R_MX→R_ACC1→R_ACC2→状态写回。入口E0接收，E11写回；所有模式11个时钟间隔相同，last最早E12被外部接收、E13复用。ACC仍组合读、三段末直接写回，D=3不变。
-- MAC核心的低有效同步复位清控制与valid，数值寄存器无需清零；复位中止所有事务。所选槽非DONE或读取编号3时，valid及输出字段为0；有效计算ctx=3仍非法。o_pipe_empty表示全部11个计算流水valid为0，不等价于全部槽空闲。
+- MAC 核心采用低有效异步复位，清零流水数据、事务元数据、valid、批次寄存器和 ACC 状态槽，并将生命周期置为 FREE。上层在 clk 域同步释放复位。所选槽非 DONE 或读取编号 3 时，valid 及输出字段为 0。有效计算 ctx=3 仍非法。o_pipe_empty 表示全部 11 个计算流水 valid 为 0。
 - 生命周期编码FREE/ACTIVE/CLOSING/DONE为00/01/10/11，批次mode/mx锁存且在占用期间不变。完成后原槽保持、指定读取释放，与先前协议一致。
 - 数值算术形式已确定。乘法器内部 Booth 门级展开和标准单元映射由 Verilog 运算与综合决定。数值精度采用指标报告与对照分析，不设统一通过阈值。
 
