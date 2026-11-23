@@ -31,8 +31,10 @@ module mac_acc_round (
         $signed({m_pre[40], m_pre}) + $signed({41'd0, increment});
     wire renorm = m_rounded == MAX_MAG || m_rounded == -MAX_MAG;
     wire signed [41:0] mantissa = renorm ? (m_rounded >>> 1) : m_rounded;
-    wire signed [10:0] h_wide = $signed({i_h[9], i_h})
-        - $signed({{4{sigma[6]}}, sigma}) + $signed({10'd0, renorm});
+    // Compute both exponent candidates while the mantissa is being rounded.
+    wire signed [10:0] h_sub = $signed({i_h[9], i_h}) - $signed({{4{sigma[6]}}, sigma});
+    wire signed [10:0] h_inc = h_sub + 11'sd1;
+    wire signed [10:0] h_wide = renorm ? h_inc : h_sub;
 
     always @* begin
         if (!i_float)

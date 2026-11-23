@@ -57,9 +57,9 @@ module tb_new_arch_mac_forward;
         integer stage;
         begin
             if ((|{dut.r_valid, dut.r_a, dut.r_b, w0, w1, s0, s1, t,
-                   dut.p0, dut.p1, dut.p2, dut.p3, dut.q0, dut.q1,
-                   dut.align.r_p0, dut.align.r_p1, dut.align.r_p2, dut.align.r_p3,
-                   dut.align.r_q0, dut.align.r_q1,
+                   dut.prod, dut.q0, dut.q1,
+                   dut.align.r_prod, dut.align.r_q0, dut.align.r_q1,
+                   dut.align.r_nz_a, dut.align.r_nz_b,
                    dut.align.r_max_a, dut.align.r_max_b, dut.align.r_any_a, dut.align.r_any_b,
                    dut.tree_a, dut.tree_b, dut.align_e_a, dut.align_e_b,
                    dut.reduce.tree_a.r_lo, dut.reduce.tree_b.r_lo,
@@ -124,8 +124,8 @@ module tb_new_arch_mac_forward;
                 $display("E1 %0d %h %h %h %h %h %h %h %h", cycle, dut.r_meta[1],
                          dut.r_h_a[1], dut.r_h_b[1], w0, w1, s0, s1, t);
             if (dut.r_valid[2])
-                $display("E2 %0d %h %h %h %h %h %h %h %h %h", cycle, dut.r_meta[2],
-                         dut.r_h_a[2], dut.r_h_b[2], dut.p0, dut.p1, dut.p2, dut.p3, dut.q0, dut.q1);
+                $display("E2 %0d %h %h %h %h %h %h", cycle, dut.r_meta[2],
+                         dut.r_h_a[2], dut.r_h_b[2], dut.prod, dut.q0, dut.q1);
             if (dut.r_valid[3])
                 $display("E3 %0d %h %h %h %h %h %h %h", cycle, dut.r_meta[3],
                          dut.r_h_a[3], dut.r_h_b[3], dut.align.r_max_a, dut.align.r_max_b,

@@ -8,13 +8,10 @@ module mac_mul_cluster (
     input  wire [2:0]  i_mode_prod,
     input  wire [43:0] i_a,
     input  wire [43:0] i_b,
-    output wire [63:0] o_p0,
-    output wire [17:0] o_p1,
-    output wire [31:0] o_p2,
-    output wire [17:0] o_p3,
+    output wire [71:0] o_prod,
     output wire [13:0] o_q0,
-    output wire [13:0] o_q1,
-    output wire [31:0] o_pair_p0,
+    output wire [7:0]  o_q1,
+    output wire [35:0] o_pair_prod,
     output wire [6:0]  o_pair_q0
 );
     localparam [2:0] FP4 = 3'd0, FP8 = 3'd1, BF16 = 3'd2, FP16 = 3'd3,
@@ -38,8 +35,8 @@ module mac_mul_cluster (
     wire signed [23:0] high = h_base
         + $signed({{6{p01[17]}}, p01}) + $signed({{6{p10[17]}}, p10});
     wire signed [31:0] pair_product = {high, p00[7:0]};
-    assign o_pair_p0 = i_mode_prod == FP16
-        ? {{2{pair_product[29]}}, pair_product[29:0]} : pair_product;
+    assign o_pair_prod = i_mode_prod == FP16
+        ? {6'd0, pair_product[29:0]} : {4'd0, pair_product};
     assign o_pair_q0 = i_mode_prod == FP16 ? {3'b0, r_t[0][3:0]} : 7'd0;
 
     genvar j;
@@ -75,35 +72,27 @@ module mac_mul_cluster (
         wire [8:0] exp_sum = r_t[j];
         wire signed [20:0] bf16_folded =
             $signed({{3{wide0[17]}}, wide0}) <<< exp_sum[1:0];
-        reg signed [31:0] p0;
-        reg [8:0] p1, p3;
-        reg [15:0] p2;
-        reg [6:0] q0, q1;
+        reg [35:0] prod;
+        reg [6:0] q0;
+        reg [3:0] q1;
         always @* begin
-            p0 = 32'sd0;
-            p1 = 9'd0;
-            p2 = 16'd0;
-            p3 = 9'd0;
+            prod = 36'd0;
             q0 = 7'd0;
-            q1 = 7'd0;
+            q1 = 4'd0;
             case (i_mode_prod)
-                FP4, INT4: begin
-                    p0 = $signed(wide0[8:0]);
-                    p1 = small0[8:0];
-                    p2 = {{7{wide1[8]}}, wide1[8:0]};
-                    p3 = small1[8:0];
-                end
+                FP4: prod = {small1[8:0], wide1[8:0], small0[8:0], wide0[8:0]};
+                INT4: prod = {small1[7], small1[7:0], wide1[7], wide1[7:0],
+                              small0[7], small0[7:0], wide0[7], wide0[7:0]};
                 FP8, INT8: begin
-                    p0 = $signed(wide0[15:0]);
-                    p2 = wide1[15:0];
+                    prod = {4'd0, wide1[15:0], wide0[15:0]};
                     if (i_mode_prod == FP8) begin
                         q0 = {3'b0, exp_sum[3:0]};
-                        q1 = {3'b0, exp_sum[7:4]};
+                        q1 = exp_sum[7:4];
                     end
                 end
                 BF16: begin
                     if (wide0 != 18'd0) begin
-                        p0 = bf16_folded;
+                        prod = {15'd0, bf16_folded};
                         q0 = exp_sum[8:2];
                     end
                 end
@@ -111,11 +100,8 @@ module mac_mul_cluster (
             endcase
         end
 
-        assign o_p0[j*32 +: 32] = p0;
-        assign o_p1[j*9 +: 9] = p1;
-        assign o_p2[j*16 +: 16] = p2;
-        assign o_p3[j*9 +: 9] = p3;
+        assign o_prod[j*36 +: 36] = prod;
         assign o_q0[j*7 +: 7] = q0;
-        assign o_q1[j*7 +: 7] = q1;
+        assign o_q1[j*4 +: 4] = q1;
     end endgenerate
 endmodule

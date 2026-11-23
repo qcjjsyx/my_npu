@@ -20,7 +20,7 @@
 
 - MAC 核心止于 ACC 状态交接。E11 的 last 写回使上下文变为 DONE，状态留在原槽至指定读取握手，释放后的下一拍可复用。G=2 两路独立累计并共同交接，每路状态 51 位。外部提供合法调度，并在三个槽均已释放且流水排空后切换模式。
 - 已有[局部对阶实验](../experiments/README.md)和[累加精度实验](../experiments/accumulation_precision.md)的数值模型与运行结果。局部实验用后续精确累计隔离局部损失；累加实验用精确dyadic相加后RNE评价状态精度。二者的配置、覆盖范围及结论边界见各自说明与[已确认约束](decisions.md)，不能替代有限工作位电路或全部合法输入域的验证。
-- 新架构的 GLS、综合、STA 和 PPA 仍待实施。
+- **首次 DC 综合**：SMIC 28 nm 的 `mac_core` 工程快照归档在 `results/synthesis/dc/01_baseline/`，对应 ACC S2/S3 去屏蔽与指数预计算之前的 RTL。归档内 `dc/rpts_iter3_final/mac_core_qor.rpt` 记录关键路径 1.558 ns、52 级逻辑。优化后的综合结果待复测，GLS 和布局布线后 STA 仍待实施。
 - [新架构 IP 设计文档](../design/new_architecture/IP_DESIGN.md)覆盖总体接口、独立转换、乘法配对连接、MAX/对阶资源、两树归约、MX、ACC、完成读取、物理寄存器及验证场景。核心采用入口 E0 至 E11 写回的固定延迟、8 条 38-bit 加 24 条 32-bit 对阶器、两棵分拍平衡树、低有效异步复位和无效读取清零。
 
 后续架构调整和任务顺序由用户确定。以下保留设计审核期间的模型验证记录。

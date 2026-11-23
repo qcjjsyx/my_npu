@@ -50,8 +50,6 @@ module mac_acc_lane (
     reg r_tail_s1, r_tail_s2;
     reg r_bypass_s1, r_bypass_s2;
     reg [50:0] r_bypass_state_s1, r_bypass_state_s2;
-    wire signed [44:0] add_a = i_en_s2 ? r_a : 45'sd0;
-    wire signed [44:0] add_b = i_en_s2 ? r_b : 45'sd0;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             r_a <= 45'd0;
@@ -78,7 +76,7 @@ module mac_acc_lane (
             r_bypass_s2 <= 1'b0;
             r_bypass_state_s2 <= 51'd0;
         end else if (i_en_s2) begin
-            r_t <= add_a + add_b;
+            r_t <= r_a + r_b;
             r_h_s2 <= r_h_s1;
             r_tail_s2 <= r_tail_s1;
             r_bypass_s2 <= r_bypass_s1;
@@ -88,10 +86,9 @@ module mac_acc_lane (
 
     wire [50:0] next_state;
     mac_acc_round normalize (
-        .i_float(i_en_s3 && i_float_s3),
-        .i_t(i_en_s3 ? r_t : 45'sd0), .i_h(i_en_s3 ? r_h_s2 : 10'sd0),
-        .i_tail(i_en_s3 && r_tail_s2), .i_bypass(i_en_s3 && r_bypass_s2),
-        .i_bypass_state(i_en_s3 ? r_bypass_state_s2 : 51'd0), .o_state(next_state)
+        .i_float(i_float_s3), .i_t(r_t), .i_h(r_h_s2),
+        .i_tail(r_tail_s2), .i_bypass(r_bypass_s2),
+        .i_bypass_state(r_bypass_state_s2), .o_state(next_state)
     );
 
     // S3's combinational result is captured directly in the selected context.

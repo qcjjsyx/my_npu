@@ -81,23 +81,22 @@ module mac_forward (
         end
     endgenerate
 
-    wire [511:0] p0, tree_a, tree_b;
-    wire [143:0] p1, p3;
-    wire [255:0] p2;
-    wire [111:0] q0, q1;
+    wire [575:0] prod;
+    wire [511:0] tree_a, tree_b;
+    wire [111:0] q0;
+    wire [63:0] q1;
     wire signed [9:0] align_e_a, align_e_b, sum_e_a, sum_e_b;
     wire signed [8:0] sum_h_a, sum_h_b;
     wire signed [40:0] n_a, n_b;
     mac_mul_frontend #(.CLUSTER_COUNT(8)) mul (
         .clk(clk), .rst_n(rst_n), .i_en_mul(advance[0]), .i_en_prod(advance[1]),
         .i_mode_mul(r_meta[0][7:5]), .i_mode_prod(r_meta[1][7:5]),
-        .i_a(r_a), .i_b(r_b), .o_p0(p0), .o_p1(p1), .o_p2(p2), .o_p3(p3),
-        .o_q0(q0), .o_q1(q1)
+        .i_a(r_a), .i_b(r_b), .o_prod(prod), .o_q0(q0), .o_q1(q1)
     );
     mac_align align (
         .clk(clk), .rst_n(rst_n), .i_en_max(advance[2]), .i_en_align(advance[3]),
         .i_mode_max(r_meta[2][7:5]), .i_mode_align(r_meta[3][7:5]), .i_mx_align(r_meta[3][4]),
-        .i_p0(p0), .i_p1(p1), .i_p2(p2), .i_p3(p3), .i_q0(q0), .i_q1(q1),
+        .i_prod(prod), .i_q0(q0), .i_q1(q1),
         .o_tree_a(tree_a), .o_tree_b(tree_b), .o_e_a(align_e_a), .o_e_b(align_e_b)
     );
     mac_reduce reduce (

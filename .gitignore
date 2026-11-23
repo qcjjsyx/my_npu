@@ -46,6 +46,9 @@ references/projects/*/
 # ---------- 实验运行数据、派生结果与检查日志 ----------
 /results/
 
+# DC 各轮综合报告与工程快照归档在 results 下，随运行产物一起忽略。
+/results/synthesis/dc/
+
 # ---------- 测试向量：数据可由生成器重建，保留说明 ----------
 /hardware/verification/vectors/*
 !/hardware/verification/vectors/vectors_readme.txt

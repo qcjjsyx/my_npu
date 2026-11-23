@@ -126,15 +126,17 @@ def _mul_record(inp):
 
 
 def _prod_record(mode, g0, g1):
-    p0, q0 = zip(*g0.products)
-    p1 = p3 = p2 = q1 = ()
-    if g1.products:
-        p2, q1 = zip(*g1.products)
+    p_a, q0 = zip(*g0.products)
+    p_b = tuple(p for p, _ in g1.products)
+    q1 = tuple(q for _, q in g1.products) if mode == Mode.FP8 else ()
     if mode in PACKED:
-        p0, p1 = p0[::2], p0[1::2]
-        p2, p3 = p2[::2], p2[1::2]
-    return (_pack(p0, 32), _pack(p1, 9), _pack(p2, 16), _pack(p3, 9),
-            _pack(q0, 7), _pack(q1, 7))
+        slots = (_pack((*p_a[j:j+2], *p_b[j:j+2]), 9) for j in range(0, len(p_a), 2))
+    elif mode in (Mode.FP8, Mode.INT8):
+        slots = (_pack(pair, 16) for pair in zip(p_a, p_b, strict=True))
+    else:
+        width = {Mode.BF16: 21, Mode.FP16: 30, Mode.INT16: 32}[mode]
+        slots = (_bits(p, width) for p in p_a)
+    return _pack(slots, 36), _pack(q0, 7), _pack(q1, 4)
 
 
 def _tree_leaves(mode, a, b):

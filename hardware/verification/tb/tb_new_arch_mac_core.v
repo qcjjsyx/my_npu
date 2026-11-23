@@ -46,12 +46,18 @@ module tb_new_arch_mac_core;
     reg [3:0] batch_before;
     reg [50:0] expected_slot0 [0:2];
     reg [50:0] expected_slot1 [0:2];
+    reg [107:0] prev_s2_0, prev_s2_1;
+    reg hold_s2_0, hold_s2_1;
+    wire [107:0] acc0_s2_data = {dut.acc0.r_t, dut.acc0.r_h_s2, dut.acc0.r_tail_s2,
+                                dut.acc0.r_bypass_s2, dut.acc0.r_bypass_state_s2};
+    wire [107:0] acc1_s2_data = {dut.acc1.r_t, dut.acc1.r_h_s2, dut.acc1.r_tail_s2,
+                                dut.acc1.r_bypass_s2, dut.acc1.r_bypass_state_s2};
     wire [3:0] batch = {dut.contexts.batch_mode, dut.contexts.batch_mx};
     wire integer_s2 = dut.acc_meta_s1[7] && !dut.acc_meta_s1[4];
-    wire signed [45:0] add_wide0 = $signed({dut.acc0.add_a[44], dut.acc0.add_a})
-        + $signed({dut.acc0.add_b[44], dut.acc0.add_b});
-    wire signed [45:0] add_wide1 = $signed({dut.acc1.add_a[44], dut.acc1.add_a})
-        + $signed({dut.acc1.add_b[44], dut.acc1.add_b});
+    wire signed [45:0] add_wide0 = $signed({dut.acc0.r_a[44], dut.acc0.r_a})
+        + $signed({dut.acc0.r_b[44], dut.acc0.r_b});
+    wire signed [45:0] add_wide1 = $signed({dut.acc1.r_a[44], dut.acc1.r_a})
+        + $signed({dut.acc1.r_b[44], dut.acc1.r_b});
 
     task check_schedule;
         begin
@@ -136,12 +142,6 @@ module tb_new_arch_mac_core;
                 $display("FAIL unused ACC1 align inputs");
                 $finish;
             end
-            if ((!dut.en1_s2 && {dut.acc1.add_a, dut.acc1.add_b} !== 90'd0) ||
-                (!dut.en1_s3 && dut.acc1.next_state !== 51'd0)) begin
-                $display("FAIL unused ACC1 sum or round inputs");
-                $finish;
-            end
-
             if (!rst_n) begin
                 if ((|{batch, dut.acc_valid, dut.acc_meta_s1, dut.acc_meta_s2,
                        dut.acc0.r_a, dut.acc0.r_b, dut.acc0.r_t,
@@ -176,13 +176,24 @@ module tb_new_arch_mac_core;
                 expected_slot1[j] = dut.acc1.r_state[j];
             end
             if (dut.en_s3) begin
+                // The trace represents writes. ACC1 has no candidate to report when disabled.
                 $display("W %0d %h %h %h %h", cycle, dut.acc_meta_s2, dut.en1_s3,
-                         dut.acc0.next_state, dut.acc1.next_state);
+                         dut.acc0.next_state, dut.en1_s3 ? dut.acc1.next_state : 51'd0);
                 expected_slot0[dut.acc_meta_s2[3:2]] = dut.acc0.next_state;
                 if (dut.en1_s3) expected_slot1[dut.acc_meta_s2[3:2]] = dut.acc1.next_state;
             end
+            // Use the enables sampled by the registers at this edge.
+            hold_s2_0 = rst_n && !dut.en_s2;
+            hold_s2_1 = rst_n && !dut.en1_s2;
+            prev_s2_0 = acc0_s2_data;
+            prev_s2_1 = acc1_s2_data;
             clk = 1'b1;
             #1;
+            if ((hold_s2_0 && acc0_s2_data !== prev_s2_0) ||
+                (hold_s2_1 && acc1_s2_data !== prev_s2_1)) begin
+                $display("FAIL disabled ACC S2 register changed cycle=%0d", cycle);
+                $finish;
+            end
             for (j = 0; j < 3; j = j+1) begin
                 if (dut.acc0.r_state[j] !== expected_slot0[j] ||
                     dut.acc1.r_state[j] !== expected_slot1[j]) begin
