@@ -1,6 +1,6 @@
 # 项目状态
 
-状态更新日期：2026-11-22。下文旧基线证据日期为2026-10-31。
+状态更新日期：2026-11-25。下文旧基线证据日期为2026-10-31。
 
 本文记录新架构的设计、RTL 验证与数值实验证据，以及旧 SystemVerilog dot16/Q2.34 基线的历史实现与验证状态。新架构已审核设计约束、验证边界及后续候选见[已确认约束](decisions.md)。
 
@@ -20,7 +20,13 @@
 
 - MAC 核心止于 ACC 状态交接。E11 的 last 写回使上下文变为 DONE，状态留在原槽至指定读取握手，释放后的下一拍可复用。G=2 两路独立累计并共同交接，每路状态 51 位。外部提供合法调度，并在三个槽均已释放且流水排空后切换模式。
 - 已有[局部对阶实验](../experiments/README.md)和[累加精度实验](../experiments/accumulation_precision.md)的数值模型与运行结果。局部实验用后续精确累计隔离局部损失；累加实验用精确dyadic相加后RNE评价状态精度。二者的配置、覆盖范围及结论边界见各自说明与[已确认约束](decisions.md)，不能替代有限工作位电路或全部合法输入域的验证。
-- **首次 DC 综合**：SMIC 28 nm 的 `mac_core` 工程快照归档在 `results/synthesis/dc/01_baseline/`，对应 ACC S2/S3 去屏蔽与指数预计算之前的 RTL。归档内 `dc/rpts_iter3_final/mac_core_qor.rpt` 记录关键路径 1.558 ns、52 级逻辑。优化后的综合结果待复测，GLS 和布局布线后 STA 仍待实施。
+- **2026-11-23 RTL 综合后微架构优化**：在保持数值合同、对外端口、E0→E11 延迟、D=3 与低有效异步复位不变的前提下，完成两项优化：① ACC S2/S3 去除入口冗余使能屏蔽门，S3 并行预计算 `H_a−σ` 与 `H_a−σ+1` 后由重规格化标志选择；② `R_PROD`/`R_MAX` 合并为统一 16×36-bit 乘积槽并将 B 组粗指数 `q1`/`r_max_b` 收窄为 4-bit，`R_MAX` 寄存逐槽 `r_nz_a`/`r_nz_b` 供对阶复用，32 条移位器按 4-bit 步长在字宽内收窄（两级字段净减 1,027 位）。优化后硬件验证回归 **233 项**通过（含新架构转换器 9 项、前向链 29 项、核心 41 项），文档链接检查通过。
+
+- **DC 综合归档（SMIC 28 nm HKC RVT，TT 0.9 V 25 °C，零线载，150 ps Setup / 50 ps Hold Uncertainty）**：
+  - **基线版 `01_baseline`**（`results/synthesis/dc/01_baseline/`，对应 2026-11-23 两项 RTL 优化前，500 MHz 面积优先）：`dc/rpts_iter3_final/mac_core_qor.rpt` 记录总单元面积 36,670.79 µm²（6,743 FF + 219 ICG）、关键路径 1.558 ns（52 级，Setup Slack +0.279 ns，Hold 违例 0）、默认翻转率估算功耗 4.7936 mW、残余 1 条 3 ps 的 `max_transition` 违例。
+  - **优化版 `02_opt_rtl`**（`results/synthesis/dc/02_opt_rtl/`，对应 2026-11-23 优化后冻结 RTL，500 MHz 面积优先，2026-11-24 归档）：同条件复测 `dc/rpts/mac_core_qor.rpt` 记录总单元面积 **34,484.06 µm²**（净降 5.96%，**5,989 FF + 195 ICG**，净减 754 FF 与 24 ICG）、关键路径 **1.514 ns**（起点由 `acc_valid_reg_1_` 变为 `acc1_r_t_reg_44_`，Setup Slack **+0.322 ns**，Hold 违例 0）、默认翻转率估算功耗 **4.4544 mW**（净降 7.08%）、仍残余 1 条 3 ps 的 `max_transition` 违例（`n12452`）。
+  - **高频扫频与极限摸底 `03_freq_sweep`**（`results/synthesis/dc/03_freq_sweep/`，与 `02_opt_rtl` 相同冻结 RTL，移除 `set_max_area 0`/`optimize_netlist -area` 并采用时序优先 3-Pass 编译，2026-11-25 归档）：完成 800 MHz ~ 1.82 GHz 共 6 个频点（`1.250 / 1.000 / 0.800 / 0.700 / 0.600 / 0.550 ns`）扫描。实测结果：**1.00 GHz**（`1.000 ns`）实现 Setup/Hold 零违例（1 条 3 ps `max_transition`）、总面积 **36,659.95 µm²**（略低于 `01_baseline` 500 MHz 面积，等面积实现 2× 频率）、估算功耗 8.9939 mW；**1.25 GHz**（`0.800 ns`）为最佳全零违例甜点（**0 Setup / 0 Hold / 0 DRC**，31 级逻辑，总面积 **38,094.59 µm²**，较 500 MHz 增 10.5%，估算功耗 11.4541 mW）；**1.43 GHz**（`0.700 ns`）为最高 Setup/Hold 零违例收敛点（WNS 0.000 ns、TNS 0.000 ns、4 条 `max_fanout` 违例、总面积 40,005.76 µm²）；`0.600 ns`（WNS -0.103 ns）与 `0.550 ns`（WNS -0.141 ns、全芯片 TNS -104.238 ns）下纯组合关键路径收敛于 `0.532 ~ 0.544 ns`，锁定物理极限周期 **`0.691 ~ 0.703 ns`（`~1.43 GHz`）**。超频全量违例分析显示 5 条核心流水级（`E0→E1`、`E2→E3`、`E7→E8`、`E8→E9`、`E10→E11`）在 `0.520 ~ 0.543 ns` 同步触顶，11 级流水线切分均衡、无单点短板。
+  - **冻结与口径边界**：2026-11-25 用户确认新架构与 [hardware/rtl/verilog/new_arch/](../../hardware/rtl/verilog/new_arch/) RTL 正式定型冻结，不再继续做架构或代码级优化，后续工作转向毕业论文撰写与答辩准备。上述综合数据均属 TT 典型角、RVT 单阈值、零线载、无 SAIF/VCD 翻转率标注的逻辑综合结果；SS 慢角/多 Vt/线载评估、Formality LEC/GLS、分模式 SAIF 功耗和布局布线后 STA 未纳入本轮实测。
 - [新架构 IP 设计文档](../design/new_architecture/IP_DESIGN.md)覆盖总体接口、独立转换、乘法配对连接、MAX/对阶资源、两树归约、MX、ACC、完成读取、物理寄存器及验证场景。核心采用入口 E0 至 E11 写回的固定延迟、8 条 38-bit 加 24 条 32-bit 对阶器、两棵分拍平衡树、低有效异步复位和无效读取清零。
 
 后续架构调整和任务顺序由用户确定。以下保留设计审核期间的模型验证记录。
@@ -39,9 +45,9 @@
 
 迁移后在新根目录环境执行 `python -m pytest -q -ra -p no:cacheprovider`，结果为 **442 passed in 53.12s**。这包括 134 项硬件验证和 308 项实验框架测试，没有将活动 Verilog 改写计作已通过实现。完整验收信息见[迁移验证记录](verification_20261031.md)。
 
-## 旧基线开发中
+## 旧基线已移除未完成改写
 
-`hardware/rtl/verilog/` 根层四个文件为旧基线的未完成改写。乘法模块只有未完成的接口，端口声明存在语法错误。转换与打包模块尚未接入回归。编译入口分别见[编译清单](../../hardware/filelists/README.md)。
+原位于 `hardware/rtl/verilog/` 根层的 4 个旧基线未完成改写文件已移除；当前 `hardware/rtl/verilog/new_arch/` 为新架构 Verilog-2001 源码。历史清单 `hardware/filelists/verilog.f` 暂作迁移留档，不再用于编译；现行编译入口见[编译清单](../../hardware/filelists/README.md)。
 
 ## 旧基线实现与证据缺口
 

@@ -557,9 +557,9 @@ valid                        两组共用有效位；G由mode推导
 - R_IN至R_MUL的指数求和由FP8、BF16和FP16共用，每前端一颗9-bit无符号加法器。FP8将两个3-bit粗指数各补一位零后拼接，同时得到两个4-bit和。BF16使用完整9-bit和，FP16仅使用偶前端的低4位。输入拼接和结果位段见IP_DESIGN第3.2节。
 - MX无损规格化保留k=floor(log2|N|)数学定义，硬件采用符号异或前导检测、N=-1旁路及临时U=-2^40边界修正，不使用求绝对值加一链。具体公式见IP_DESIGN第6章。
 - scale入口每侧16位，低/高字节分别g0/g1原始E8M0；R_IN在signed10临时域计算并生成每组signed9 h，验证分别检查活动scale不为FF，MX级只加一次。公共metadata为mode/mx/ctx/first/last（8位）及valid，group以物理槽索引表示。
-- 两棵16输入非零MAX树。A组按unsigned7比较以覆盖BF16 postfold。B组只处理FP8 g1，粗指数和为0…14，树内取Q_i[3:0]按unsigned4比较，Q*_B零扩展为unsigned7后写入R_MAX。对阶器共8条38-bit与24条32-bit，前8条宽路复用FP8/BF16的32-bit符号扩展数据及FP16，余下对应窄路。距离9位，超宽右移符号填充，不统一清零。
+- 两棵 16 输入非零 MAX 树。A 组按 unsigned7 比较以覆盖 BF16 postfold，最大值以 7 位写入 `R_MAX`；B 组只处理 FP8 g1（粗指数和 0…14），直接接收每槽 4 位 `q1` 按 unsigned4 比较，最大值以 4 位写入 `R_MAX`，生成局部指数时再零扩展。`R_PROD` 与 `R_MAX` 使用统一 16×36-bit 乘积槽（`q0` 16×7 位、`q1` 16×4 位），`R_MAX` 同拍寄存两组 16 位逐槽非零标志供对阶复用。对阶器共 8 条 38-bit 与 24 条 32-bit，前 8 条宽路复用 FP8/BF16 的 32-bit 符号扩展数据及 FP16，余下对应窄路；以 4 位为步长在字宽内算术右移（38-bit 路 `diff>=10`、32-bit 路 `diff>=8` 超宽时符号填充，不统一清零）。
 - 两棵32→36-bit平衡归约树各在第2层后寄存34-bit部分和、第4层后寄存36-bit和，最终41-bit重构后寄存。FP16低和unsigned22零扩展、高和signed22符号扩展后移19位。FP4/INT4 packing合同不变。
-- 核心物理顺序为R_IN→R_MUL→R_PROD→R_MAX→R_ALIGN→R_TREE_LO→R_TREE_HI→R_SUM→R_MX→R_ACC1→R_ACC2→状态写回。入口E0接收，E11写回；所有模式11个时钟间隔相同，last最早E12被外部接收、E13复用。ACC仍组合读、三段末直接写回，D=3不变。
+- 核心物理顺序为R_IN→R_MUL→R_PROD→R_MAX→R_ALIGN→R_TREE_LO→R_TREE_HI→R_SUM→R_MX→R_ACC1→R_ACC2→状态写回。入口E0接收，E11写回；所有模式11个时钟间隔相同，last最早E12被外部接收、E13复用。ACC仍组合读、三段末直接写回，D=3不变；S2 加法与 S3 规格化直连前级寄存器（写回由每路使能门控），S3 并行预计算 `H_a-σ` 与 `H_a-σ+1` 后由重规格化进位选择。
 - MAC 核心采用低有效异步复位，清零流水数据、事务元数据、valid、批次寄存器和 ACC 状态槽，并将生命周期置为 FREE。上层在 clk 域同步释放复位。所选槽非 DONE 或读取编号 3 时，valid 及输出字段为 0。有效计算 ctx=3 仍非法。o_pipe_empty 表示全部 11 个计算流水 valid 为 0。
 - 生命周期编码FREE/ACTIVE/CLOSING/DONE为00/01/10/11，批次mode/mx锁存且在占用期间不变。完成后原槽保持、指定读取释放，与先前协议一致。
 - 数值算术形式已确定。乘法器内部 Booth 门级展开和标准单元映射由 Verilog 运算与综合决定。数值精度采用指标报告与对照分析，不设统一通过阈值。
@@ -577,4 +577,4 @@ valid                        两组共用有效位；G由mode推导
 
 新架构的数值合同、资源结构、事务生命周期、D=3以及P1-5的前向连接、编码、寄存器和复位细节已通过用户整体审核，形成当前设计基线。
 
-独立转换器、MAC 前向链和完整核心已完成 RTL 共仿。完整核心验证包含 ACC 工作位与加后 RNE、事务周期、连续交错供数和 16384 项定向长点积。GLS、综合、STA 和 PPA 属于后续物理评估。数值精度采用指标报告与对照分析。复现入口见[硬件验证说明](../../hardware/verification/README.md)。
+独立转换器、MAC 前向链和完整核心已完成 RTL 共仿。完整核心验证包含 ACC 工作位与加后 RNE、事务周期、连续交错供数和 16384 项定向长点积。基线版、2026-11-23 优化版与 2026-11-25 高频扫频（800 MHz ~ 1.82 GHz，1.25 GHz 全零违例、~1.43 GHz 物理极限）的 SMIC 28 nm（TT 0.9 V 25 °C、零线载）DC 逻辑综合快照已分别归档于 `results/synthesis/dc/01_baseline/`、`results/synthesis/dc/02_opt_rtl/` 与 `results/synthesis/dc/03_freq_sweep/`。2026-11-25 用户确认当前架构与 RTL 正式定型冻结，不再做架构或代码级优化；SS 角/线载/多 Vt 评估、LEC/GLS、分模式 SAIF 功耗与布局布线后 STA 未纳入本轮实测。数值精度采用指标报告与对照分析。复现入口见[硬件验证说明](../../hardware/verification/README.md)。

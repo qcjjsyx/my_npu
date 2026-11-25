@@ -3,7 +3,7 @@
 从项目根目录使用文件清单，文件中的路径均相对项目根目录。
 
 - `systemverilog.f`：15 个已验证生产源文件，类型包先编译。
-- `verilog.f`：旧基线的 4 个未完成改写文件。
+- `verilog.f`：历史留档清单（原指向旧基线 4 个未完成改写文件，对应源码已移除，不再用于编译）。
 - [`new_arch_convert.f`](new_arch_convert.f) 包含独立输入转换器生产源码，顶层为 `mac_input_convert`，使用 `iverilog -g2001` 编译。共仿入口见[硬件验证说明](../verification/README.md#新架构独立输入转换器)。
 - [`new_arch_mac.f`](new_arch_mac.f) 包含完整 MAC 核心，使用 `iverilog -g2001` 编译。`mac_core` 是完整顶层，`mac_forward` 可作为前向子模块单独编译。执行方法见[核心共仿](../verification/README.md#新架构-mac-核心与-acc)。
 
